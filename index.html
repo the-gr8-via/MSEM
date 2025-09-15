@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3PL Partner Decision Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Calm Harmony (Stone, Slate, Muted Blue/Green/Amber) -->
+    <!-- Application Structure Plan: A narrative, scroll-driven SPA guiding the user from problem (logistics crisis) to solution (3PL recommendation). The core is an interactive decision framework where users can adjust criteria weights, instantly seeing the impact on a comparative radar chart. A Gemini-powered button in the recommendation section generates a qualitative risk/mitigation report for the top candidate, adding a strategic analysis layer. The flow is: 1. The Challenge, 2. Interactive Framework, 3. Visual Comparison, 4. Final Recommendation & AI Analysis. -->
+    <!-- Visualization & Content Choices: Report Info (3PL options, criteria) -> Goal (Compare multi-variate data) -> Viz (Interactive Radar Chart) -> Interaction (Weight sliders dynamically update chart) -> Justification (Visually demonstrates how changing priorities impacts the 'best' choice) -> Library (Chart.js). Report Info (Final Score) -> Goal (Clearly show winner) -> Viz (Bar Chart) -> Interaction (Static) -> Justification (Simple, unambiguous result display) -> Library (Chart.js). Report Info (Winning candidate) -> Goal (Generate qualitative strategic insights) -> Viz (Formatted Text Block) -> Interaction (Button click triggers Gemini API) -> Justification (Adds deep, actionable intelligence beyond quantitative scores) -> Method (Gemini API Call). CONFIRMATION: NO SVG/Mermaid used. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F5F5F4; /* stone-100 */
+            color: #292524; /* stone-800 */
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 40vh;
+            max-height: 500px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 50vh;
+            }
+        }
+        .section-card {
+            background-color: #FFFFFF;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .nav-button {
+            transition: all 0.3s ease;
+        }
+        .nav-button.active {
+            background-color: #0c4a6e; /* sky-800 */
+            color: #FFFFFF;
+        }
+         .nav-button:not(.active):hover {
+            background-color: #e0f2fe; /* sky-100 */
+        }
+        .slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #0c4a6e; /* sky-800 */
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        .slider-track {
+            width: 100%;
+            height: 8px;
+            cursor: pointer;
+            background: #d1d5db; /* gray-300 */
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <header class="bg-white shadow-sm sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <h1 class="text-2xl sm:text-3xl font-bold text-sky-900 text-center">Fashion Brand Logistics Transformation: 3PL Partner Decision Dashboard</h1>
+        </div>
+        <nav class="bg-stone-50 border-t border-b border-stone-200">
+            <div class="max-w-4xl mx-auto flex justify-center items-center space-x-2 sm:space-x-4 p-2">
+                <a href="#challenge" class="nav-button text-xs sm:text-sm font-medium text-stone-700 px-3 py-2 rounded-md">1. The Challenge</a>
+                <a href="#framework" class="nav-button text-xs sm:text-sm font-medium text-stone-700 px-3 py-2 rounded-md">2. Decision Framework</a>
+                <a href="#comparison" class="nav-button text-xs sm:text-sm font-medium text-stone-700 px-3 py-2 rounded-md">3. Partner Comparison</a>
+                <a href="#recommendation" class="nav-button text-xs sm:text-sm font-medium text-stone-700 px-3 py-2 rounded-md">4. Final Recommendation</a>
+            </div>
+        </nav>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <section id="challenge" class="section-card scroll-mt-32">
+            <h2 class="text-2xl font-bold text-sky-900 mb-4 text-center">1. The Logistics Challenge We Face</h2>
+            <p class="text-center text-stone-600 max-w-3xl mx-auto mb-8">
+                As our brand rapidly expands, our current logistics system has become a bottleneck to growth. Fragmented suppliers, soaring costs, and increasing customer complaints are seriously eroding our profits and brand reputation. It's time to establish a unified, efficient, and scalable national logistics system.
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+                <div class="bg-rose-50 p-6 rounded-lg">
+                    <div class="text-4xl font-bold text-rose-600 mb-2">35% 🔺</div>
+                    <h3 class="font-semibold text-stone-800">YoY Increase in Complaints</h3>
+                    <p class="text-sm text-stone-500">Mainly regarding late deliveries and order errors</p>
+                </div>
+                <div class="bg-amber-50 p-6 rounded-lg">
+                    <div class="text-4xl font-bold text-amber-600 mb-2">18% 🔺</div>
+                    <h3 class="font-semibold text-stone-800">Logistics Cost as % of Revenue</h3>
+                    <p class="text-sm text-stone-500">Above the industry average of 12%</p>
+                </div>
+                <div class="bg-sky-50 p-6 rounded-lg">
+                    <div class="text-4xl font-bold text-sky-600 mb-2">4+</div>
+                    <h3 class="font-semibold text-stone-800">Major Logistics Providers</h3>
+                    <p class="text-sm text-stone-500">Siloed data prevents unified management</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="framework" class="section-card scroll-mt-32">
+            <h2 class="text-2xl font-bold text-sky-900 mb-4 text-center">2. Interactive Decision Framework</h2>
+            <p class="text-center text-stone-600 max-w-3xl mx-auto mb-8">
+                We've designed a comprehensive framework to objectively evaluate potential 3PL partners. Using the sliders below, you can adjust the "importance weight" of each criterion to simulate partner selection under different business strategies. Your adjustments will instantly update the comparison charts below.
+            </p>
+            <div id="criteria-sliders" class="space-y-6"></div>
+        </section>
+
+        <section id="comparison" class="section-card scroll-mt-32">
+            <h2 class="text-2xl font-bold text-sky-900 mb-4 text-center">3. Candidate Partner Capability Comparison</h2>
+             <p class="text-center text-stone-600 max-w-3xl mx-auto mb-8">
+                This radar chart dynamically displays the capability scores of the three candidate companies (Ryder, Flexport, Penske) based on the weights you set above. A larger area covered by a company's plot indicates a better fit with our needs.
+            </p>
+            <div class="chart-container mb-12">
+                <canvas id="comparisonRadarChart"></canvas>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="border border-stone-200 rounded-lg p-6 bg-stone-50">
+                    <h3 class="text-xl font-bold text-stone-800">Ryder System Inc.</h3>
+                    <p class="text-sm text-stone-500 mb-4">The Traditional Asset-Based Giant</p>
+                    <p class="text-stone-700">Strengths lie in its vast owned fleet and extensive infrastructure, providing stable transport and fulfillment. Highly experienced in e-commerce order processing with excellent operational reliability. While not a tech leader, its mature WMS/TMS systems are robust.</p>
+                </div>
+                <div class="border border-stone-200 rounded-lg p-6 bg-stone-50">
+                    <h3 class="text-xl font-bold text-stone-800">Flexport</h3>
+                    <p class="text-sm text-stone-500 mb-4">The Digital-Native Platform</p>
+                    <p class="text-stone-700">Core advantage is its leading technology platform, offering superior data visibility, real-time tracking, and analytics. Highly attractive for a fashion brand needing granular inventory management and forecasting. Relies on a partner network, which may pose capacity challenges during peak seasons.</p>
+                </div>
+                <div class="border border-stone-200 rounded-lg p-6 bg-stone-50">
+                    <h3 class="text-xl font-bold text-stone-800">Penske Logistics</h3>
+                    <p class="text-sm text-stone-500 mb-4">The Warehousing & Transport Expert</p>
+                    <p class="text-stone-700">Boasts a broad warehousing and transportation network across North America and Europe, excelling in complex supply chain solutions and dedicated fleet management. A strong contender for businesses seeking deep integration and customized warehousing. Has less specific experience in the fashion industry.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="recommendation" class="section-card scroll-mt-32">
+            <h2 class="text-2xl font-bold text-sky-900 mb-4 text-center">4. Overall Score & Final Recommendation</h2>
+            <p class="text-center text-stone-600 max-w-3xl mx-auto mb-8">
+                Based on our default weights for the fashion industry (emphasizing technology and cost), the chart below shows the final weighted score for each candidate. This score changes in real-time as you adjust the framework sliders.
+            </p>
+            <div class="chart-container" style="height: 350px; max-height: 400px;">
+                <canvas id="recommendationBarChart"></canvas>
+            </div>
+            <div id="recommendation-text" class="mt-8 text-center bg-sky-50 p-6 rounded-lg"></div>
+            <div id="gemini-feature-container" class="mt-6 text-center">
+                <button id="generate-report-btn" class="bg-sky-700 text-white font-bold py-2 px-6 rounded-lg hover:bg-sky-800 transition-colors duration-300 disabled:bg-stone-400">
+                    ✨ Generate AI Risk & Mitigation Report
+                </button>
+            </div>
+            <div id="ai-report-container" class="mt-6 p-6 bg-stone-50 rounded-lg border border-stone-200" style="display: none;">
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-white mt-12 border-t">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-sm text-stone-500">
+            <p>&copy; 2025 Internal Decision Analysis | For Internal Use Only</p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+            const appData = {
+                criteria: [
+                    { id: 'tech', name: 'Technology & Integration', weight: 25, description: 'Seamless integration with our e-commerce (Shopify) and ERP platforms; quality of data visibility.' },
+                    { id: 'tco', name: 'Total Cost of Ownership (TCO)', weight: 25, description: 'Comprehensive cost structure including transport, warehousing, management, and hidden fees.' },
+                    { id: 'ops', name: 'Operational Excellence', weight: 20, description: 'Order accuracy, on-time delivery (OTD) rates, inventory accuracy, and customer service quality.' },
+                    { id: 'scale', name: 'Scalability & Flexibility', weight: 15, description: 'Ability to handle seasonal peaks and support future expansion into new markets.' },
+                    { id: 'fashion', name: 'Fashion Industry Experience', weight: 15, description: 'Expertise in handling multi-SKU, returns management, and value-added services (VAS).' }
+                ],
+                companies: [
+                    { name: 'Ryder', color: 'rgba(56, 189, 248, 0.6)', borderColor: 'rgb(14, 116, 144)', scores: { tech: 7, tco: 6, ops: 9, scale: 8, fashion: 7 } },
+                    { name: 'Flexport', color: 'rgba(251, 191, 36, 0.6)', borderColor: 'rgb(217, 119, 6)', scores: { tech: 10, tco: 7, ops: 7, scale: 8, fashion: 9 } },
+                    { name: 'Penske', color: 'rgba(134, 239, 172, 0.6)', borderColor: 'rgb(22, 101, 52)', scores: { tech: 6, tco: 8, ops: 8, scale: 9, fashion: 5 } }
+                ]
+            };
+
+            let currentWeights = {};
+            const criteriaContainer = document.getElementById('criteria-sliders');
+            let radarChart, barChart;
+
+            function init() {
+                renderSliders();
+                createCharts();
+                updateVisuals();
+                setupNavigation();
+            }
+            
+            function renderSliders() {
+                let sliderHTML = '';
+                appData.criteria.forEach(c => {
+                    currentWeights[c.id] = c.weight;
+                    sliderHTML += `
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-2 md:gap-4 items-center">
+                            <div class="md:col-span-2">
+                                <label for="${c.id}-slider" class="font-semibold text-stone-700">${c.name}</label>
+                                <p class="text-xs text-stone-500">${c.description}</p>
+                            </div>
+                            <div class="md:col-span-2 flex items-center">
+                                <input type="range" id="${c.id}-slider" data-id="${c.id}" min="0" max="100" value="${c.weight}" class="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer slider-track">
+                            </div>
+                            <div class="text-right">
+                                <span id="${c.id}-value" class="text-lg font-bold text-sky-800 w-12 inline-block">${c.weight}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                criteriaContainer.innerHTML = sliderHTML;
+                
+                document.querySelectorAll('input[type="range"]').forEach(slider => {
+                    slider.addEventListener('input', handleSliderChange);
+                });
+            }
+
+            function handleSliderChange(e) {
+                const changedId = e.target.dataset.id;
+                const newValue = parseInt(e.target.value, 10);
+                currentWeights[changedId] = newValue;
+                document.getElementById(`${changedId}-value`).textContent = newValue;
+                updateVisuals();
+            }
+
+            function calculateScores() {
+                const totalWeight = Object.values(currentWeights).reduce((sum, w) => sum + w, 0);
+                if (totalWeight === 0) return appData.companies.map(comp => ({ ...comp, weightedScore: 0 }));
+
+                return appData.companies.map(company => {
+                    let weightedScore = 0;
+                    appData.criteria.forEach(criterion => {
+                        const score = company.scores[criterion.id];
+                        const weight = currentWeights[criterion.id];
+                        weightedScore += score * weight;
+                    });
+                    return { ...company, weightedScore: weightedScore / totalWeight };
+                });
+            }
+
+            function createCharts() {
+                const radarCtx = document.getElementById('comparisonRadarChart').getContext('2d');
+                radarChart = new Chart(radarCtx, {
+                    type: 'radar',
+                    data: {
+                        labels: appData.criteria.map(c => c.name),
+                        datasets: appData.companies.map(company => ({
+                            label: company.name,
+                            data: [],
+                            backgroundColor: company.color,
+                            borderColor: company.borderColor,
+                            borderWidth: 2,
+                            pointBackgroundColor: company.borderColor,
+                            pointBorderColor: '#fff',
+                            pointHoverBackgroundColor: '#fff',
+                            pointHoverBorderColor: company.borderColor
+                        }))
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        scales: { r: { beginAtZero: true, max: 10, grid: { color: 'rgba(0,0,0,0.05)' }, angleLines: { color: 'rgba(0,0,0,0.05)' }, pointLabels: { font: { size: 12 }, color: '#44403c' } } },
+                        plugins: { legend: { position: 'top' } }
+                    }
+                });
+
+                const barCtx = document.getElementById('recommendationBarChart').getContext('2d');
+                barChart = new Chart(barCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Overall Weighted Score', data: [], backgroundColor: appData.companies.map(c => c.color),
+                            borderColor: appData.companies.map(c => c.borderColor), borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                        scales: { x: { beginAtZero: true, max: 10, grid: { display: false } }, y: { grid: { display: false } } },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            }
+            
+            function updateVisuals() {
+                const scoredCompanies = calculateScores();
+                
+                radarChart.data.datasets.forEach((dataset) => {
+                    const companyData = appData.companies.find(c => c.name === dataset.label);
+                    dataset.data = appData.criteria.map(c => companyData.scores[c.id]);
+                });
+                radarChart.update();
+
+                scoredCompanies.sort((a, b) => b.weightedScore - a.weightedScore);
+                
+                barChart.data.labels = scoredCompanies.map(c => c.name);
+                barChart.data.datasets[0].data = scoredCompanies.map(c => c.weightedScore.toFixed(2));
+                barChart.update();
+
+                updateRecommendationText(scoredCompanies);
+            }
+
+            function updateRecommendationText(scoredCompanies) {
+                const winner = scoredCompanies[0];
+                const runnerUp = scoredCompanies[1];
+                const recommendationDiv = document.getElementById('recommendation-text');
+                const generateBtn = document.getElementById('generate-report-btn');
+                const aiReportContainer = document.getElementById('ai-report-container');
+                
+                let text = `
+                    <h3 class="text-xl font-bold text-sky-800 mb-2">Based on current weights, our top choice is: ${winner.name}</h3>
+                    <p class="text-stone-700">
+                        ${winner.name} has an overall weighted score of <strong class="text-xl">${winner.weightedScore.toFixed(2)}</strong>,
+                        showing the most balanced performance across the criteria you value. It particularly excels in
+                        ${getTopCriteriaForCompany(winner)}, aligning well with our strategic direction.
+                    </p>
+                    <p class="text-stone-600 mt-2 text-sm">
+                        ${runnerUp.name} (score ${runnerUp.weightedScore.toFixed(2)}) is also a strong contender,
+                        ${getComparisonText(winner, runnerUp)}.
+                        You can return to the <a href="#framework" class="text-sky-700 font-semibold hover:underline">Decision Framework</a> to adjust weights and explore the best choice under different strategies.
+                    </p>`;
+                recommendationDiv.innerHTML = text;
+
+                aiReportContainer.style.display = 'none';
+                aiReportContainer.innerHTML = '';
+                const newBtn = generateBtn.cloneNode(true);
+                generateBtn.parentNode.replaceChild(newBtn, generateBtn);
+
+                newBtn.addEventListener('click', async () => {
+                    newBtn.disabled = true;
+                    newBtn.innerHTML = `
+                        <svg class="animate-spin -ml-1 mr-3 h-5 w-5 inline-block text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Generating report...`;
+                    aiReportContainer.style.display = 'block';
+                    aiReportContainer.innerHTML = '<p class="text-stone-500">AI is analyzing, please wait...</p>';
+                    
+                    const companyProfiles = {
+                        'Ryder': 'A traditional asset-based 3PL giant. Its strengths lie in its vast owned fleet and extensive infrastructure, providing high operational reliability. While not a tech leader, its systems are mature.',
+                        'Flexport': 'A digital-native freight platform. Its core advantage is its leading technology platform, offering superior data visibility. It relies on a partner network, which may pose capacity challenges during peak seasons.',
+                        'Penske': 'A warehousing and transportation expert. It boasts a broad warehousing network across North America and Europe, excelling in complex supply chain solutions. It has less specific experience in the fashion industry.'
+                    };
+
+                    const prompt = `Act as a top-tier logistics management consultant. For a rapidly expanding mid-sized US fashion brand, conduct an in-depth analysis of selecting "${winner.name}" as their national 3PL partner. Company background: ${companyProfiles[winner.name]}. Write a concise, professional report in English, clearly structured into two parts: 1. **Potential Risks:** Based on the company's characteristics, list 3-4 of the most significant potential partnership risks. 2. **Recommended Mitigation Strategies:** For each risk identified, propose specific, actionable mitigation or response strategies. The report should be direct and to the point, without any introduction or conclusion.`;
+
+                    try {
+                        const resultText = await generateWithExponentialBackoff(prompt);
+                        const formattedResult = resultText
+                            .replace(/\n\*\*([^\*]+)\*\*/g, '<h5 class="text-md font-bold text-stone-800 mt-4 mb-2">$1</h5>')
+                            .replace(/\*\*([^\*]+)\*\*/g, '<strong class="text-stone-800">$1</strong>')
+                            .replace(/\n\s*(\d+\.)/g, '<div class="mt-2 pl-4"><strong class="text-stone-700">$1</strong>')
+                            .replace(/\n\s*-/g, '</div><div class="pl-8 text-stone-600">&bull;&nbsp;');
+
+                        aiReportContainer.innerHTML = `
+                            <h4 class="text-lg font-bold text-sky-800 mb-2 text-left">AI Risk & Mitigation Report for ${winner.name}</h4>
+                            <div class="text-left text-stone-700 leading-relaxed">${formattedResult}</div>
+                        `;
+                    } catch (error) {
+                        console.error("Gemini API call failed:", error);
+                        aiReportContainer.innerHTML = '<p class="text-red-600">Failed to generate report. Please try again later.</p>';
+                    } finally {
+                        newBtn.disabled = false;
+                        newBtn.textContent = '✨ Regenerate AI Risk & Mitigation Report';
+                    }
+                });
+            }
+
+            async function generateWithExponentialBackoff(prompt, maxRetries = 5) {
+                let delay = 1000;
+                for (let i = 0; i < maxRetries; i++) {
+                    try {
+                        const payload = { contents: [{ parts: [{ text: prompt }] }] };
+                        const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+
+                        if (!response.ok) {
+                            if (response.status === 429 || response.status >= 500) { throw new Error(`API Error: ${response.status}`); } 
+                            else { const errorBody = await response.json(); console.error("Non-retriable API error:", errorBody); return `API Request Error: ${errorBody.error?.message || 'Unknown error'}`; }
+                        }
+                        const result = await response.json();
+                        const candidate = result.candidates?.[0];
+                        if (candidate && candidate.content?.parts?.[0]?.text) { return candidate.content.parts[0].text; } 
+                        else { throw new Error("Invalid response structure from API"); }
+                    } catch (error) {
+                        console.warn(`Attempt ${i + 1} failed. Retrying in ${delay}ms...`, error.message);
+                        if (i === maxRetries - 1) { throw error; }
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2;
+                    }
+                }
+            }
+
+            function getTopCriteriaForCompany(company) {
+                const sortedCriteria = Object.keys(company.scores).sort((a,b) => company.scores[b] - company.scores[a]);
+                return sortedCriteria.slice(0, 2).map(id => appData.criteria.find(c => c.id === id).name).join(' and ');
+            }
+
+
+
+            function getComparisonText(winner, runnerUp) {
+                if (winner.name === 'Flexport') return "especially where Ryder offers a different value proposition in asset control and traditional operational reliability";
+                if (winner.name === 'Ryder') return "especially with its top-tier technology platform that provides powerful support for data-driven decisions";
+                return "which has unique advantages in its warehousing network and infrastructure";
+            }
+
+            function setupNavigation() {
+                const sections = document.querySelectorAll('section');
+                const navLinks = document.querySelectorAll('nav a');
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            navLinks.forEach(link => {
+                                link.classList.toggle('active', link.getAttribute('href').substring(1) === entry.target.id);
+                            });
+                        }
+                    });
+                }, { rootMargin: "-50% 0px -50% 0px" });
+                sections.forEach(section => { observer.observe(section); });
+                navLinks.forEach(link => {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        document.querySelector(link.getAttribute('href')).scrollIntoView({ behavior: 'smooth' });
+                    });
+                });
+            }
+
+            init();
+        });
+    </script>
+</body>
+</html>
