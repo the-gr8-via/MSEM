@@ -1,443 +1,536 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-Hant">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3PL Partner Decision Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
-    <!-- Chosen Palette: Calm Harmony (Stone, Slate, Muted Blue/Green/Amber) -->
-    <!-- Application Structure Plan: A narrative, scroll-driven SPA guiding the user from problem (logistics crisis) to solution (3PL recommendation). The core is an interactive decision framework where users can adjust criteria weights, instantly seeing the impact on a comparative radar chart. A Gemini-powered button in the recommendation section generates a qualitative risk/mitigation report for the top candidate, adding a strategic analysis layer. The flow is: 1. The Challenge, 2. Interactive Framework, 3. Visual Comparison, 4. Final Recommendation & AI Analysis. -->
-    <!-- Visualization & Content Choices: Report Info (3PL options, criteria) -> Goal (Compare multi-variate data) -> Viz (Interactive Radar Chart) -> Interaction (Weight sliders dynamically update chart) -> Justification (Visually demonstrates how changing priorities impacts the 'best' choice) -> Library (Chart.js). Report Info (Final Score) -> Goal (Clearly show winner) -> Viz (Bar Chart) -> Interaction (Static) -> Justification (Simple, unambiguous result display) -> Library (Chart.js). Report Info (Winning candidate) -> Goal (Generate qualitative strategic insights) -> Viz (Formatted Text Block) -> Interaction (Button click triggers Gemini API) -> Justification (Adds deep, actionable intelligence beyond quantitative scores) -> Method (Gemini API Call). CONFIRMATION: NO SVG/Mermaid used. -->
-    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #F5F5F4; /* stone-100 */
-            color: #292524; /* stone-800 */
-        }
-        .chart-container {
-            position: relative;
-            width: 100%;
-            max-width: 700px;
-            margin-left: auto;
-            margin-right: auto;
-            height: 40vh;
-            max-height: 500px;
-        }
-        @media (min-width: 768px) {
-            .chart-container {
-                height: 50vh;
-            }
-        }
-        .section-card {
-            background-color: #FFFFFF;
-            border-radius: 0.75rem;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        .nav-button {
-            transition: all 0.3s ease;
-        }
-        .nav-button.active {
-            background-color: #0c4a6e; /* sky-800 */
-            color: #FFFFFF;
-        }
-         .nav-button:not(.active):hover {
-            background-color: #e0f2fe; /* sky-100 */
-        }
-        .slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 20px;
-            height: 20px;
-            background: #0c4a6e; /* sky-800 */
-            cursor: pointer;
-            border-radius: 50%;
-        }
-        .slider-track {
-            width: 100%;
-            height: 8px;
-            cursor: pointer;
-            background: #d1d5db; /* gray-300 */
-            border-radius: 9999px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dual‑OR Scheduler — v2.5 (Stage Colors, F after O)</title>
+  <style>
+    /* =====================
+       Design tokens
+       ===================== */
+    :root{
+      --day-mins: 570;            /* 7:30–17:00 */
+      --px-per-min: 2;            /* timeline scale */
+      --lane-h: 48px;             /* lane height */
+      --gap: 10px;                /* lane gap */
+
+      --bg: #f6f7fb; --text:#1f2937; --muted:#64748b; --card:#fff; --line:#e7e9f0; --line-2:#eef0f6;
+      --brand:#0f172a; --primary:#2563eb; --primary-2:#6366f1;
+
+      /* Base palette */
+      --green:#10b981; --green-700:#047857; --amber:#eab308; --amber-700:#b45309; --blue:#3b82f6; --blue-700:#1d4ed8;
+
+      /* KPI colors */
+      --idle-ok:#002d74; --idle-high:#f3c300;
+
+      /* === Stage colors (you can edit these) === */
+      --col-S:#e97132; --col-S-b:#c2410c; --col-S-t:#fff;  /* Setup */
+      --col-I:#92d050; --col-I-b:#6aa84f; --col-I-t:#fff;  /* Induction */
+      --col-O:#c00000; --col-O-b:#7f0000; --col-O-t:#fff;  /* Operation */
+      --col-W:#00b0f0; --col-W-b:#0077a3; --col-W-t:#fff;  /* Wake-up */
+      --col-C:#0b76a0; --col-C-b:#064d66; --col-C-t:#fff;  /* Clean-up */
+      --col-F:#d86ecc; --col-F-b:#a8329b; --col-F-t:#fff;  /* Family comm (Doctor only) */
+    }
+
+    *,*::before,*::after{ box-sizing:border-box; }
+    html,body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; color:var(--text); background:var(--bg); -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+
+    header{ background:var(--brand); color:#fff; padding:16px 20px; }
+    header h1{ margin:0; font-size:20px; font-weight:800; }
+    header .sub{ margin-top:6px; font-size:12px; opacity:.9 }
+
+    .container{ padding:16px 20px; display:grid; grid-template-columns:minmax(320px,420px) minmax(0,1fr); gap:16px; }
+    @media (max-width:1100px){ .container{ grid-template-columns:1fr; } }
+
+    .card{ background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:0 1px 2px rgba(0,0,0,.04); min-width:0; }
+    .card h2{ margin:0; padding:12px 14px; font-size:16px; border-bottom:1px solid var(--line-2); }
+    .section{ padding:12px 14px; }
+
+    .muted{ color:var(--muted); }
+    .badge{ display:inline-block; padding:2px 6px; border-radius:999px; font-size:11px; border:1px solid #e2e8f0; background:#f1f5f9; }
+
+    input[type="text"],input[type="number"],input[type="time"],select{ width:100%; padding:8px 10px; border:1px solid #d9dce7; border-radius:8px; background:#fff; font-size:13px; }
+    label{ font-size:12px; color:#475569; display:block; margin-bottom:4px; }
+    .stack>div{ margin-top:10px; }
+    .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    @media (max-width:720px){ .form-grid{ grid-template-columns:1fr; } }
+
+    .checkbox-row{ display:grid; grid-template-columns: 1fr 1fr; gap:8px 12px; margin-top:8px; }
+    .checkbox-row label{ display:flex; align-items:center; gap:6px; font-size:12px; }
+    input[type="checkbox"]{ transform:scale(1.1); }
+
+    .btn-row{ margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; }
+    .btn{ padding:8px 10px; border-radius:8px; border:1px solid #d9dce7; background:#fff; cursor:pointer; font-weight:600; font-size:13px; text-align:center; }
+    .btn.primary{ background: var(--primary); border-color: var(--primary); color:#fff; }
+    .btn.ghost{ background:transparent; }
+
+    .mode{ display:inline-flex; background:#eef2ff; border-radius:10px; overflow:hidden; border:1px solid #c7d2fe; }
+    .mode button{ border:none; padding:8px 12px; font-weight:700; color:#334155; background:transparent; cursor:pointer; }
+    .mode button.active{ background:var(--primary-2); color:#fff; }
+
+    .kpis{ display:grid; grid-template-columns: repeat(2,1fr); gap:8px; margin-bottom:10px; }
+    .kpi{ background:#4e6d9e; color:#fff; border-radius:10px; padding:10px 12px; }
+    .kpi small{ opacity:.85; display:block; font-weight:500; }
+    .kpi.idle{ background: var(--idle-ok); }
+    .kpi.idle.high{ background: var(--idle-high); color:#000; }
+
+    .legend{ padding:6px 14px; font-size:12px; color:#475569; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .chip{ display:inline-block; width:14px; height:10px; border-radius:3px; border:1px solid #cbd5e1; }
+
+    .gantt-wrap{ padding:12px 14px; display:grid; grid-template-columns:160px 1fr; gap:12px; align-items:start; max-width:100%; }
+    .gantt{ position:relative; width:100%; overflow-x:auto; border:1px dashed #cbd5e1; background:#fcfdff; border-radius:10px; padding:12px; }
+    .gantt::-webkit-scrollbar{ height: 10px; }
+    .gantt::-webkit-scrollbar-thumb{ background:#cbd5e1; border-radius: 999px; }
+
+    .left-col-outer{ position: sticky; left: 0; align-self:start; z-index:6; }
+    .label-row{ height: var(--lane-h); display:flex; align-items:center; color:#475569; font-size:12px; border-right:1px solid #e2e8f0; padding-left:10px; background:#f8fafc; margin-bottom: var(--gap); border-radius:8px 0 0 8px; }
+
+    .gantt-inner{ position: relative; }
+    .scale{ position:sticky; top:0; z-index:2; height:20px; margin-bottom:6px; white-space:nowrap; background:#fcfdff; }
+    .tick{ display:inline-block; height:100%; border-left:1px solid #e2e8f0; color:#64748b; font-size:11px; text-align:left; padding-left:2px; box-sizing:content-box; }
+
+    .lane{ position:relative; height:var(--lane-h); border:1px solid #e2e8f0; background:#f8fafc; border-radius:8px; margin-bottom:var(--gap); }
+
+    .block{ position:absolute; top:5px; height: calc(var(--lane-h) - 10px); border-radius:6px; overflow:hidden; }
+    .block .label{ font-size:12px; font-weight:700; padding:2px 6px; }
+    .block.locked{ outline:2px dashed rgba(0,0,0,.15); }
+
+    /* Stage color classes */
+    .block.S{ background:var(--col-S); border:1px solid var(--col-S-b); color:var(--col-S-t);} /* Setup */
+    .block.I{ background:var(--col-I); border:1px solid var(--col-I-b); color:var(--col-I-t);} /* Induction */
+    .block.O{ background:var(--col-O); border:1px solid var(--col-O-b); color:var(--col-O-t);} /* Operation */
+    .block.W{ background:var(--col-W); border:1px solid var(--col-W-b); color:var(--col-W-t);} /* Wake-up */
+    .block.C{ background:var(--col-C); border:1px solid var(--col-C-b); color:var(--col-C-t);} /* Clean-up */
+    .block.F{ background:var(--col-F); border:1px solid var(--col-F-b); color:var(--col-F-t);} /* Family comm. (Doctor only) */
+
+    table{ width:100%; border-collapse:collapse; font-size:13px; }
+    th,td{ padding:8px; border-bottom:1px solid var(--line-2); text-align:left; }
+    th{ color:#475569; font-weight:700; background:#f8fafc; }
+    tr:last-child td{ border-bottom:none; }
+    .right{ text-align:right; }
+
+    .notice{ margin-top:8px; font-size:12px; color:#b45309; display:none; }
+    .notice.show{ display:block; }
+  </style>
 </head>
-<body class="antialiased">
-    <header class="bg-white shadow-sm sticky top-0 z-10">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <h1 class="text-2xl sm:text-3xl font-bold text-sky-900 text-center">Fashion Brand Logistics Transformation: 3PL Partner Decision Dashboard</h1>
+<body>
+  <header>
+    <h1>Dual‑OR Scheduler</h1>
+    <div class="sub">Mode: <span class="badge" id="modeLabel">Plan Builder</span> · Day length 570 min (≈ 07:30–17:00)</div>
+  </header>
+
+  <div class="container">
+    <!-- LEFT: Controls -->
+    <div class="card">
+      <h2>Controls</h2>
+      <div class="section">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+          <label><strong>Mode</strong></label>
+          <div class="mode" role="tablist" aria-label="Mode switch">
+            <button id="btnPlan" class="active" aria-pressed="true">Plan Builder</button>
+            <button id="btnGap" aria-pressed="false">Gap Filler</button>
+          </div>
         </div>
-        <nav class="bg-stone-50 border-t border-b border-stone-200">
-            <div class="max-w-4xl mx-auto flex justify-center items-center space-x-2 sm:space-x-4 p-2">
-                <a href="#challenge" class="nav-button text-xs sm:text-sm font-medium text-stone-700 px-3 py-2 rounded-md">1. The Challenge</a>
-                <a href="#framework" class="nav-button text-xs sm:text-sm font-medium text-stone-700 px-3 py-2 rounded-md">2. Decision Framework</a>
-                <a href="#comparison" class="nav-button text-xs sm:text-sm font-medium text-stone-700 px-3 py-2 rounded-md">3. Partner Comparison</a>
-                <a href="#recommendation" class="nav-button text-xs sm:text-sm font-medium text-stone-700 px-3 py-2 rounded-md">4. Final Recommendation</a>
-            </div>
-        </nav>
-    </header>
+      </div>
 
-    <main class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-        
-        <section id="challenge" class="section-card scroll-mt-32">
-            <h2 class="text-2xl font-bold text-sky-900 mb-4 text-center">1. The Logistics Challenge We Face</h2>
-            <p class="text-center text-stone-600 max-w-3xl mx-auto mb-8">
-                As our brand rapidly expands, our current logistics system has become a bottleneck to growth. Fragmented suppliers, soaring costs, and increasing customer complaints are seriously eroding our profits and brand reputation. It's time to establish a unified, efficient, and scalable national logistics system.
-            </p>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-                <div class="bg-rose-50 p-6 rounded-lg">
-                    <div class="text-4xl font-bold text-rose-600 mb-2">35% 🔺</div>
-                    <h3 class="font-semibold text-stone-800">YoY Increase in Complaints</h3>
-                    <p class="text-sm text-stone-500">Mainly regarding late deliveries and order errors</p>
-                </div>
-                <div class="bg-amber-50 p-6 rounded-lg">
-                    <div class="text-4xl font-bold text-amber-600 mb-2">18% 🔺</div>
-                    <h3 class="font-semibold text-stone-800">Logistics Cost as % of Revenue</h3>
-                    <p class="text-sm text-stone-500">Above the industry average of 12%</p>
-                </div>
-                <div class="bg-sky-50 p-6 rounded-lg">
-                    <div class="text-4xl font-bold text-sky-600 mb-2">4+</div>
-                    <h3 class="font-semibold text-stone-800">Major Logistics Providers</h3>
-                    <p class="text-sm text-stone-500">Siloed data prevents unified management</p>
-                </div>
-            </div>
-        </section>
-
-        <section id="framework" class="section-card scroll-mt-32">
-            <h2 class="text-2xl font-bold text-sky-900 mb-4 text-center">2. Interactive Decision Framework</h2>
-            <p class="text-center text-stone-600 max-w-3xl mx-auto mb-8">
-                We've designed a comprehensive framework to objectively evaluate potential 3PL partners. Using the sliders below, you can adjust the "importance weight" of each criterion to simulate partner selection under different business strategies. Your adjustments will instantly update the comparison charts below.
-            </p>
-            <div id="criteria-sliders" class="space-y-6"></div>
-        </section>
-
-        <section id="comparison" class="section-card scroll-mt-32">
-            <h2 class="text-2xl font-bold text-sky-900 mb-4 text-center">3. Candidate Partner Capability Comparison</h2>
-             <p class="text-center text-stone-600 max-w-3xl mx-auto mb-8">
-                This radar chart dynamically displays the capability scores of the three candidate companies (Ryder, Flexport, Penske) based on the weights you set above. A larger area covered by a company's plot indicates a better fit with our needs.
-            </p>
-            <div class="chart-container mb-12">
-                <canvas id="comparisonRadarChart"></canvas>
-            </div>
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="border border-stone-200 rounded-lg p-6 bg-stone-50">
-                    <h3 class="text-xl font-bold text-stone-800">Ryder System Inc.</h3>
-                    <p class="text-sm text-stone-500 mb-4">The Traditional Asset-Based Giant</p>
-                    <p class="text-stone-700">Strengths lie in its vast owned fleet and extensive infrastructure, providing stable transport and fulfillment. Highly experienced in e-commerce order processing with excellent operational reliability. While not a tech leader, its mature WMS/TMS systems are robust.</p>
-                </div>
-                <div class="border border-stone-200 rounded-lg p-6 bg-stone-50">
-                    <h3 class="text-xl font-bold text-stone-800">Flexport</h3>
-                    <p class="text-sm text-stone-500 mb-4">The Digital-Native Platform</p>
-                    <p class="text-stone-700">Core advantage is its leading technology platform, offering superior data visibility, real-time tracking, and analytics. Highly attractive for a fashion brand needing granular inventory management and forecasting. Relies on a partner network, which may pose capacity challenges during peak seasons.</p>
-                </div>
-                <div class="border border-stone-200 rounded-lg p-6 bg-stone-50">
-                    <h3 class="text-xl font-bold text-stone-800">Penske Logistics</h3>
-                    <p class="text-sm text-stone-500 mb-4">The Warehousing & Transport Expert</p>
-                    <p class="text-stone-700">Boasts a broad warehousing and transportation network across North America and Europe, excelling in complex supply chain solutions and dedicated fleet management. A strong contender for businesses seeking deep integration and customized warehousing. Has less specific experience in the fashion industry.</p>
-                </div>
-            </div>
-        </section>
-
-        <section id="recommendation" class="section-card scroll-mt-32">
-            <h2 class="text-2xl font-bold text-sky-900 mb-4 text-center">4. Overall Score & Final Recommendation</h2>
-            <p class="text-center text-stone-600 max-w-3xl mx-auto mb-8">
-                Based on our default weights for the fashion industry (emphasizing technology and cost), the chart below shows the final weighted score for each candidate. This score changes in real-time as you adjust the framework sliders.
-            </p>
-            <div class="chart-container" style="height: 350px; max-height: 400px;">
-                <canvas id="recommendationBarChart"></canvas>
-            </div>
-            <div id="recommendation-text" class="mt-8 text-center bg-sky-50 p-6 rounded-lg"></div>
-            <div id="gemini-feature-container" class="mt-6 text-center">
-                <button id="generate-report-btn" class="bg-sky-700 text-white font-bold py-2 px-6 rounded-lg hover:bg-sky-800 transition-colors duration-300 disabled:bg-stone-400">
-                    ✨ Generate AI Risk & Mitigation Report
-                </button>
-            </div>
-            <div id="ai-report-container" class="mt-6 p-6 bg-stone-50 rounded-lg border border-stone-200" style="display: none;">
-            </div>
-        </section>
-
-    </main>
-
-    <footer class="bg-white mt-12 border-t">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-sm text-stone-500">
-            <p>&copy; 2025 Internal Decision Analysis | For Internal Use Only</p>
+      <div class="section kpis">
+        <div class="kpi">
+          <small>Planned so far</small>
+          <div style="font-size:22px; font-weight:800" id="kpiCount">0</div>
+          <div style="font-size:12px" id="kpiBreak">Confirmed 0 · Tentative 0 · Emerg 0</div>
+          <div style="font-size:11px; opacity:.85" id="kpiUpdated">Last updated —</div>
         </div>
-    </footer>
+        <div class="kpi idle" id="kpiIdleCard">
+          <small>Surgeon downtime (est.)</small>
+          <div style="font-size:22px; font-weight:800" id="kpiIdle">0 min</div>
+          <div style="font-size:12px" id="kpiUtil">OR1 — 0% · OR2 — 0%</div>
+          <div style="font-size:11px; opacity:.85">Objective: minimize downtime</div>
+        </div>
+      </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const apiKey = ""; 
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+      <h2>Add / Edit Case</h2>
+      <div class="section">
+        <div class="stack" aria-label="primary fields">
+          <div>
+            <label for="caseId">Case ID (auto if blank)</label>
+            <input type="text" id="caseId" placeholder="e.g., C-101" />
+          </div>
+          <div>
+            <label for="oMin">Operation (O) min *</label>
+            <input type="number" id="oMin" min="10" step="5" placeholder="e.g., 60" />
+          </div>
+          <div>
+            <label for="winStart">Earliest start (HH:MM, optional)</label>
+            <input type="time" id="winStart" min="07:30" max="17:00" step="300" placeholder="e.g., 08:30" />
+          </div>
+        </div>
 
-            const appData = {
-                criteria: [
-                    { id: 'tech', name: 'Technology & Integration', weight: 25, description: 'Seamless integration with our e-commerce (Shopify) and ERP platforms; quality of data visibility.' },
-                    { id: 'tco', name: 'Total Cost of Ownership (TCO)', weight: 25, description: 'Comprehensive cost structure including transport, warehousing, management, and hidden fees.' },
-                    { id: 'ops', name: 'Operational Excellence', weight: 20, description: 'Order accuracy, on-time delivery (OTD) rates, inventory accuracy, and customer service quality.' },
-                    { id: 'scale', name: 'Scalability & Flexibility', weight: 15, description: 'Ability to handle seasonal peaks and support future expansion into new markets.' },
-                    { id: 'fashion', name: 'Fashion Industry Experience', weight: 15, description: 'Expertise in handling multi-SKU, returns management, and value-added services (VAS).' }
-                ],
-                companies: [
-                    { name: 'Ryder', color: 'rgba(56, 189, 248, 0.6)', borderColor: 'rgb(14, 116, 144)', scores: { tech: 7, tco: 6, ops: 9, scale: 8, fashion: 7 } },
-                    { name: 'Flexport', color: 'rgba(251, 191, 36, 0.6)', borderColor: 'rgb(217, 119, 6)', scores: { tech: 10, tco: 7, ops: 7, scale: 8, fashion: 9 } },
-                    { name: 'Penske', color: 'rgba(134, 239, 172, 0.6)', borderColor: 'rgb(22, 101, 52)', scores: { tech: 6, tco: 8, ops: 8, scale: 9, fashion: 5 } }
-                ]
-            };
+        <div class="form-grid" style="margin-top:10px">
+          <div>
+            <label for="status">Status</label>
+            <select id="status">
+              <option value="confirmed">Confirmed</option>
+              <option value="tentative">Tentative</option>
+              <option value="emergency">Emergency hold</option>
+            </select>
+          </div>
+          <div>
+            <label for="priority">Priority</label>
+            <select id="priority">
+              <option>Elective</option>
+              <option>Emergency</option>
+            </select>
+          </div>
+          <div>
+            <label for="lockSel">Lock</label>
+            <select id="lockSel">
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+        </div>
 
-            let currentWeights = {};
-            const criteriaContainer = document.getElementById('criteria-sliders');
-            let radarChart, barChart;
+        <div class="checkbox-row">
+          <label><input type="checkbox" id="ovS"> Set up <input type="number" id="valS" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovI"> Induction <input type="number" id="valI" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovW"> Wake up <input type="number" id="valW" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovC"> Clean up <input type="number" id="valC" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovF"> Family comm. <input type="number" id="valF" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
+        </div>
 
-            function init() {
-                renderSliders();
-                createCharts();
-                updateVisuals();
-                setupNavigation();
-            }
-            
-            function renderSliders() {
-                let sliderHTML = '';
-                appData.criteria.forEach(c => {
-                    currentWeights[c.id] = c.weight;
-                    sliderHTML += `
-                        <div class="grid grid-cols-1 md:grid-cols-5 gap-2 md:gap-4 items-center">
-                            <div class="md:col-span-2">
-                                <label for="${c.id}-slider" class="font-semibold text-stone-700">${c.name}</label>
-                                <p class="text-xs text-stone-500">${c.description}</p>
-                            </div>
-                            <div class="md:col-span-2 flex items-center">
-                                <input type="range" id="${c.id}-slider" data-id="${c.id}" min="0" max="100" value="${c.weight}" class="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer slider-track">
-                            </div>
-                            <div class="text-right">
-                                <span id="${c.id}-value" class="text-lg font-bold text-sky-800 w-12 inline-block">${c.weight}</span>
-                            </div>
-                        </div>
-                    `;
-                });
-                criteriaContainer.innerHTML = sliderHTML;
-                
-                document.querySelectorAll('input[type="range"]').forEach(slider => {
-                    slider.addEventListener('input', handleSliderChange);
-                });
-            }
+        <div class="btn-row">
+          <button class="btn primary" id="btnAdd">Add / Update Case</button>
+          <button class="btn" id="btnClear">Clear Form</button>
+          <button class="btn ghost" id="btnReopt">Re‑optimize</button>
+        </div>
+        <div style="margin-top:6px" class="muted">Defaults: S 7.5, I 20, W 20, C 7.5, F 10 (min). Surgeon engaged during O; see Doctor lane for O & F.</div>
+        <div id="notice" class="notice">⚠️ Some cases could not be placed within the day window. Consider unlocking, adjusting start windows, or durations.</div>
+      </div>
+    </div>
 
-            function handleSliderChange(e) {
-                const changedId = e.target.dataset.id;
-                const newValue = parseInt(e.target.value, 10);
-                currentWeights[changedId] = newValue;
-                document.getElementById(`${changedId}-value`).textContent = newValue;
-                updateVisuals();
-            }
+    <!-- RIGHT: Timeline & Table -->
+    <div class="card">
+      <h2>Schedule & Timeline</h2>
+      <div class="legend">
+        <span><span class="chip" style="background:var(--col-S);"></span> S</span>
+        <span><span class="chip" style="background:var(--col-I);"></span> I</span>
+        <span><span class="chip" style="background:var(--col-O);"></span> O</span>
+        <span><span class="chip" style="background:var(--col-W);"></span> W</span>
+        <span><span class="chip" style="background:var(--col-C);"></span> C</span>
+        <span><span class="chip" style="background:var(--col-F);"></span> F (Doctor)</span>
+      </div>
+      <div class="gantt-wrap">
+        <div id="gantt" class="gantt" role="region" aria-label="Timeline"></div>
+      </div>
 
-            function calculateScores() {
-                const totalWeight = Object.values(currentWeights).reduce((sum, w) => sum + w, 0);
-                if (totalWeight === 0) return appData.companies.map(comp => ({ ...comp, weightedScore: 0 }));
+      <h2>Cases</h2>
+      <div class="section">
+        <table id="tbl">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Status</th>
+              <th>O</th>
+              <th>S/I/W/C/F</th>
+              <th>Room</th>
+              <th>Start</th>
+              <th>Lock</th>
+              <th class="right">Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 
-                return appData.companies.map(company => {
-                    let weightedScore = 0;
-                    appData.criteria.forEach(criterion => {
-                        const score = company.scores[criterion.id];
-                        const weight = currentWeights[criterion.id];
-                        weightedScore += score * weight;
-                    });
-                    return { ...company, weightedScore: weightedScore / totalWeight };
-                });
-            }
+  <script>
+  // =====================
+  // State & constants
+  // =====================
+  const DAY_MINS = 570; // minutes in day window
+  let PX = 2;           // pixels per minute (responsive)
+  const defaults = { S: 7.5, I: 20, W: 20, C: 7.5, F: 10 };
+  let cases = []; // {id,O,S,I,W,C,F,status,locked,winStart,start,room}
+  let mode = 'plan';
+  let seq = 1;
 
-            function createCharts() {
-                const radarCtx = document.getElementById('comparisonRadarChart').getContext('2d');
-                radarChart = new Chart(radarCtx, {
-                    type: 'radar',
-                    data: {
-                        labels: appData.criteria.map(c => c.name),
-                        datasets: appData.companies.map(company => ({
-                            label: company.name,
-                            data: [],
-                            backgroundColor: company.color,
-                            borderColor: company.borderColor,
-                            borderWidth: 2,
-                            pointBackgroundColor: company.borderColor,
-                            pointBorderColor: '#fff',
-                            pointHoverBackgroundColor: '#fff',
-                            pointHoverBorderColor: company.borderColor
-                        }))
-                    },
-                    options: {
-                        responsive: true, maintainAspectRatio: false,
-                        scales: { r: { beginAtZero: true, max: 10, grid: { color: 'rgba(0,0,0,0.05)' }, angleLines: { color: 'rgba(0,0,0,0.05)' }, pointLabels: { font: { size: 12 }, color: '#44403c' } } },
-                        plugins: { legend: { position: 'top' } }
-                    }
-                });
+  // Helpers
+  const $ = (id) => document.getElementById(id);
+  const nowStr = () => new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+  const nnum = (v, fb) => { const n = parseFloat(v); return Number.isFinite(n) ? n : fb; };
+  const safe = (x) => { const n = Number(x); return Number.isFinite(n) ? n : 0; };
 
-                const barCtx = document.getElementById('recommendationBarChart').getContext('2d');
-                barChart = new Chart(barCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: [],
-                        datasets: [{
-                            label: 'Overall Weighted Score', data: [], backgroundColor: appData.companies.map(c => c.color),
-                            borderColor: appData.companies.map(c => c.borderColor), borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-                        scales: { x: { beginAtZero: true, max: 10, grid: { display: false } }, y: { grid: { display: false } } },
-                        plugins: { legend: { display: false } }
-                    }
-                });
-            }
-            
-            function updateVisuals() {
-                const scoredCompanies = calculateScores();
-                
-                radarChart.data.datasets.forEach((dataset) => {
-                    const companyData = appData.companies.find(c => c.name === dataset.label);
-                    dataset.data = appData.criteria.map(c => companyData.scores[c.id]);
-                });
-                radarChart.update();
+  // Convert minutes from 07:30 origin to clock label
+  const START_H = 7, START_M = 30;
+  function clockLabel(min){ const total = START_H*60 + START_M + min; const h = Math.floor(total/60), m = total%60; return `${h}:${String(m).padStart(2,'0')}`; }
+  function fmt(min){ return (min==null) ? '—' : clockLabel(min); }
+  function toRelMinutes(t){ if(!t) return NaN; const parts = t.split(':'); if(parts.length !== 2) return NaN; const hh = parseInt(parts[0], 10), mm = parseInt(parts[1], 10); if(!Number.isFinite(hh)||!Number.isFinite(mm)) return NaN; const abs = hh*60 + mm; const origin = START_H*60 + START_M; return abs - origin; }
+  function toTimeInput(min){ if(min==null) return ''; const origin=START_H*60+START_M; const abs = origin + min; const h=Math.floor(abs/60), m=abs%60; return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); }
 
-                scoredCompanies.sort((a, b) => b.weightedScore - a.weightedScore);
-                
-                barChart.data.labels = scoredCompanies.map(c => c.name);
-                barChart.data.datasets[0].data = scoredCompanies.map(c => c.weightedScore.toFixed(2));
-                barChart.update();
+  // Durations (F excluded from OR occupancy)
+  const durOR = (c) => safe(c.S) + safe(c.I) + safe(c.O) + safe(c.W) + safe(c.C);
+  const durTotal = (c) => durOR(c) + safe(c.F);
 
-                updateRecommendationText(scoredCompanies);
-            }
+  // Feasibility: OR block only uses S/I/O/W/C; surgeon O cannot overlap across cases
+  function feasibleAt(c, start, room){
+    const end = start + durOR(c);
+    if(start < (c.winStart||0) || end > DAY_MINS) return false;
 
-            function updateRecommendationText(scoredCompanies) {
-                const winner = scoredCompanies[0];
-                const runnerUp = scoredCompanies[1];
-                const recommendationDiv = document.getElementById('recommendation-text');
-                const generateBtn = document.getElementById('generate-report-btn');
-                const aiReportContainer = document.getElementById('ai-report-container');
-                
-                let text = `
-                    <h3 class="text-xl font-bold text-sky-800 mb-2">Based on current weights, our top choice is: ${winner.name}</h3>
-                    <p class="text-stone-700">
-                        ${winner.name} has an overall weighted score of <strong class="text-xl">${winner.weightedScore.toFixed(2)}</strong>,
-                        showing the most balanced performance across the criteria you value. It particularly excels in
-                        ${getTopCriteriaForCompany(winner)}, aligning well with our strategic direction.
-                    </p>
-                    <p class="text-stone-600 mt-2 text-sm">
-                        ${runnerUp.name} (score ${runnerUp.weightedScore.toFixed(2)}) is also a strong contender,
-                        ${getComparisonText(winner, runnerUp)}.
-                        You can return to the <a href="#framework" class="text-sky-700 font-semibold hover:underline">Decision Framework</a> to adjust weights and explore the best choice under different strategies.
-                    </p>`;
-                recommendationDiv.innerHTML = text;
+    const cOs = start + safe(c.S) + safe(c.I);
+    const cOe = cOs + safe(c.O);
+    for(const x of cases){
+      if(x === c || x.start == null) continue;
+      const xOs = x.start + safe(x.S) + safe(x.I);
+      const xOe = xOs + safe(x.O);
+      if(!(cOe <= xOs || xOe <= cOs)) return false; // overlap in O times => not feasible
+    }
 
-                aiReportContainer.style.display = 'none';
-                aiReportContainer.innerHTML = '';
-                const newBtn = generateBtn.cloneNode(true);
-                generateBtn.parentNode.replaceChild(newBtn, generateBtn);
+    for(const x of cases){
+      if(x === c || x.start == null || x.room !== room) continue;
+      const b1s = start, b1e = end, b2s = x.start, b2e = x.start + durOR(x);
+      if(!(b1e <= b2s || b2e <= b1s)) return false; // OR block overlap
+    }
+    return true;
+  }
 
-                newBtn.addEventListener('click', async () => {
-                    newBtn.disabled = true;
-                    newBtn.innerHTML = `
-                        <svg class="animate-spin -ml-1 mr-3 h-5 w-5 inline-block text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Generating report...`;
-                    aiReportContainer.style.display = 'block';
-                    aiReportContainer.innerHTML = '<p class="text-stone-500">AI is analyzing, please wait...</p>';
-                    
-                    const companyProfiles = {
-                        'Ryder': 'A traditional asset-based 3PL giant. Its strengths lie in its vast owned fleet and extensive infrastructure, providing high operational reliability. While not a tech leader, its systems are mature.',
-                        'Flexport': 'A digital-native freight platform. Its core advantage is its leading technology platform, offering superior data visibility. It relies on a partner network, which may pose capacity challenges during peak seasons.',
-                        'Penske': 'A warehousing and transportation expert. It boasts a broad warehousing network across North America and Europe, excelling in complex supply chain solutions. It has less specific experience in the fashion industry.'
-                    };
+  function placeEarliest(c, rooms=['OR1','OR2']){
+    const step = 5;
+    for(const room of rooms){
+      for(let t = Math.max(0, c.winStart||0); t + durOR(c) <= DAY_MINS; t += step){
+        if(feasibleAt(c, t, room)){ c.start = t; c.room = room; return true; }
+      }
+    }
+    return false;
+  }
 
-                    const prompt = `Act as a top-tier logistics management consultant. For a rapidly expanding mid-sized US fashion brand, conduct an in-depth analysis of selecting "${winner.name}" as their national 3PL partner. Company background: ${companyProfiles[winner.name]}. Write a concise, professional report in English, clearly structured into two parts: 1. **Potential Risks:** Based on the company's characteristics, list 3-4 of the most significant potential partnership risks. 2. **Recommended Mitigation Strategies:** For each risk identified, propose specific, actionable mitigation or response strategies. The report should be direct and to the point, without any introduction or conclusion.`;
+  function schedulePlan(){
+    const locked = cases.filter(c=>c.locked);
+    const unlocked = cases.filter(c=>!c.locked);
 
-                    try {
-                        const resultText = await generateWithExponentialBackoff(prompt);
-                        const formattedResult = resultText
-                            .replace(/\n\*\*([^\*]+)\*\*/g, '<h5 class="text-md font-bold text-stone-800 mt-4 mb-2">$1</h5>')
-                            .replace(/\*\*([^\*]+)\*\*/g, '<strong class="text-stone-800">$1</strong>')
-                            .replace(/\n\s*(\d+\.)/g, '<div class="mt-2 pl-4"><strong class="text-stone-700">$1</strong>')
-                            .replace(/\n\s*-/g, '</div><div class="pl-8 text-stone-600">&bull;&nbsp;');
+    locked.sort((a,b)=> (a.start ?? a.winStart ?? 0) - (b.start ?? b.winStart ?? 0));
+    for(const c of locked){ if(c.start == null) placeEarliest(c); }
 
-                        aiReportContainer.innerHTML = `
-                            <h4 class="text-lg font-bold text-sky-800 mb-2 text-left">AI Risk & Mitigation Report for ${winner.name}</h4>
-                            <div class="text-left text-stone-700 leading-relaxed">${formattedResult}</div>
-                        `;
-                    } catch (error) {
-                        console.error("Gemini API call failed:", error);
-                        aiReportContainer.innerHTML = '<p class="text-red-600">Failed to generate report. Please try again later.</p>';
-                    } finally {
-                        newBtn.disabled = false;
-                        newBtn.textContent = '✨ Regenerate AI Risk & Mitigation Report';
-                    }
-                });
-            }
+    for(const c of unlocked){ c.start = null; c.room = null; }
+    unlocked.sort((a,b)=> (a.winStart ?? 0) - (b.winStart ?? 0));
+    for(const c of unlocked){ placeEarliest(c); }
+  }
 
-            async function generateWithExponentialBackoff(prompt, maxRetries = 5) {
-                let delay = 1000;
-                for (let i = 0; i < maxRetries; i++) {
-                    try {
-                        const payload = { contents: [{ parts: [{ text: prompt }] }] };
-                        const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  function scheduleGap(){ for(const c of cases){ if(c.start == null) placeEarliest(c); } }
+  function reoptimize(){ (mode === 'plan') ? schedulePlan() : scheduleGap(); render(); }
 
-                        if (!response.ok) {
-                            if (response.status === 429 || response.status >= 500) { throw new Error(`API Error: ${response.status}`); } 
-                            else { const errorBody = await response.json(); console.error("Non-retriable API error:", errorBody); return `API Request Error: ${errorBody.error?.message || 'Unknown error'}`; }
-                        }
-                        const result = await response.json();
-                        const candidate = result.candidates?.[0];
-                        if (candidate && candidate.content?.parts?.[0]?.text) { return candidate.content.parts[0].text; } 
-                        else { throw new Error("Invalid response structure from API"); }
-                    } catch (error) {
-                        console.warn(`Attempt ${i + 1} failed. Retrying in ${delay}ms...`, error.message);
-                        if (i === maxRetries - 1) { throw error; }
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                        delay *= 2;
-                    }
-                }
-            }
+  // =====================
+  // UI wiring
+  // =====================
+  const btnPlan = $('btnPlan');
+  const btnGap  = $('btnGap');
+  const modeLabel = $('modeLabel');
+  if(btnPlan){ btnPlan.onclick = ()=>{ mode='plan'; btnPlan.classList.add('active'); btnGap.classList.remove('active'); modeLabel.textContent='Plan Builder'; render(); }; }
+  if(btnGap){  btnGap.onclick  = ()=>{ mode='gap';  btnGap.classList.add('active');  btnPlan.classList.remove('active'); modeLabel.textContent='Gap Filler';  render(); }; }
+  document.addEventListener('keydown', (e)=>{ if(e.key==='ArrowLeft'){ btnPlan?.click(); } if(e.key==='ArrowRight'){ btnGap?.click(); } });
 
-            function getTopCriteriaForCompany(company) {
-                const sortedCriteria = Object.keys(company.scores).sort((a,b) => company.scores[b] - company.scores[a]);
-                return sortedCriteria.slice(0, 2).map(id => appData.criteria.find(c => c.id === id).name).join(' and ');
-            }
+  ;['S','I','W','C','F'].forEach(k=>{ const ck=$('ov'+k), iv=$('val'+k); if(ck && iv){ ck.addEventListener('change', ()=>{ iv.disabled = !ck.checked; if(iv.disabled) iv.value=''; }); } });
 
+  const addBtn = $('btnAdd');
+  if(addBtn){ addBtn.onclick = ()=>{
+    const idTxt = ($('caseId').value || '').trim() || `C-${String(seq++).padStart(3,'0')}`;
+    const O = parseFloat($('oMin').value);
+    if(!Number.isFinite(O) || O <= 0){ alert('Please enter a valid Operation time (minutes).'); return; }
 
+    const S = $('ovS')?.checked ? nnum($('valS').value, defaults.S) : defaults.S;
+    const I = $('ovI')?.checked ? nnum($('valI').value, defaults.I) : defaults.I;
+    const W = $('ovW')?.checked ? nnum($('valW').value, defaults.W) : defaults.W;
+    const C = $('ovC')?.checked ? nnum($('valC').value, defaults.C) : defaults.C;
+    const F = $('ovF')?.checked ? nnum($('valF').value, defaults.F) : defaults.F;
 
-            function getComparisonText(winner, runnerUp) {
-                if (winner.name === 'Flexport') return "especially where Ryder offers a different value proposition in asset control and traditional operational reliability";
-                if (winner.name === 'Ryder') return "especially with its top-tier technology platform that provides powerful support for data-driven decisions";
-                return "which has unique advantages in its warehousing network and infrastructure";
-            }
+    const status = $('status').value;
+    const locked = $('lockSel').value === 'yes';
+    const wsStr = $('winStart').value; const ws = toRelMinutes(wsStr);
+    const winStart = Number.isFinite(ws) ? clamp(ws, 0, DAY_MINS) : 0;
 
-            function setupNavigation() {
-                const sections = document.querySelectorAll('section');
-                const navLinks = document.querySelectorAll('nav a');
-                const observer = new IntersectionObserver((entries) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting) {
-                            navLinks.forEach(link => {
-                                link.classList.toggle('active', link.getAttribute('href').substring(1) === entry.target.id);
-                            });
-                        }
-                    });
-                }, { rootMargin: "-50% 0px -50% 0px" });
-                sections.forEach(section => { observer.observe(section); });
-                navLinks.forEach(link => {
-                    link.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        document.querySelector(link.getAttribute('href')).scrollIntoView({ behavior: 'smooth' });
-                    });
-                });
-            }
+    const idx = cases.findIndex(x=>x.id === idTxt);
+    const data = { id:idTxt, O, S, I, W, C, F, status, locked, winStart };
+    if(idx >= 0){ cases[idx] = Object.assign(cases[idx], data); }
+    else { cases.push(Object.assign({ start:null, room:null }, data)); }
 
-            init();
-        });
-    </script>
+    (mode === 'plan') ? reoptimize() : render();
+    clearForm();
+  }; }
+
+  const clearBtn = $('btnClear'); if(clearBtn){ clearBtn.onclick = clearForm; }
+  const reoptBtn = $('btnReopt'); if(reoptBtn){ reoptBtn.onclick = reoptimize; }
+
+  function clearForm(){
+    ['caseId','oMin','winStart','valS','valI','valW','valC','valF'].forEach(id=>{ const n=$(id); if(n) n.value=''; });
+    ['ovS','ovI','ovW','ovC','ovF'].forEach(id=>{ const c=$(id); if(c){ c.checked=false; const v=$(id.replace('ov','val')); if(v) v.disabled=true; }});
+    if($('status')) $('status').value='confirmed';
+    if($('priority')) $('priority').value='Elective';
+    if($('lockSel')) $('lockSel').value='no';
+  }
+
+  // =====================
+  // KPIs
+  // =====================
+  function kpis(){
+    const count = cases.filter(c=>['confirmed','tentative','emergency'].includes(c.status)).length;
+    const conf  = cases.filter(c=>c.status==='confirmed').length;
+    const tent  = cases.filter(c=>c.status==='tentative').length;
+    const emerg = cases.filter(c=>c.status==='emergency').length;
+    $('kpiCount').textContent = count;
+    $('kpiBreak').textContent = `Confirmed ${conf} · Tentative ${tent} · Emerg ${emerg}`;
+    $('kpiUpdated').textContent = `Last updated ${nowStr()}`;
+
+    // Surgeon downtime: gaps between O blocks (union)
+    const ops = cases.filter(c=>c.start!=null).map(c=>({ os: c.start + safe(c.S) + safe(c.I), oe: c.start + safe(c.S) + safe(c.I) + safe(c.O) })).sort((a,b)=> a.os-b.os);
+    let idle=0, cur=0; for(const o of ops){ if(o.os>cur) idle += (o.os-cur); cur = Math.max(cur, o.oe); }
+    $('kpiIdle').textContent = `${Math.round(idle)} min`;
+
+    // OR utilizations exclude F
+    const occ = { OR1:0, OR2:0 };
+    for(const c of cases){ if(c.start==null||!c.room) continue; occ[c.room] += durOR(c); }
+    const u1raw = cases.some(c=>c.room==='OR1') ? Math.round((occ.OR1/DAY_MINS)*100) : 0;
+    const u2raw = cases.some(c=>c.room==='OR2') ? Math.round((occ.OR2/DAY_MINS)*100) : 0;
+    const u1 = clamp(u1raw,0,100), u2 = clamp(u2raw,0,100);
+    $('kpiUtil').textContent = `OR1 — ${u1}% · OR2 — ${u2}%`;
+
+    const notice = $('notice'); if(notice){ notice.classList.toggle('show', cases.some(c=>c.start==null)); }
+    const idleCard = document.getElementById('kpiIdleCard'); if(idleCard){ idleCard.classList.toggle('high', idle >= 60); }
+  }
+
+  // =====================
+  // Gantt rendering
+  // =====================
+  function addBlock(kind, start, end, lane, id){
+    if(end<=start) return;
+    const div = document.createElement('div');
+    div.className = `block ${kind}`;
+    div.style.left = (start*PX)+'px';
+    div.style.width = ((end-start)*PX)+'px';
+    div.innerHTML = `<div class="label">${id} ${kind}</div>`;
+    lane.appendChild(div);
+  }
+
+  function renderGantt(){
+    const wrap = document.querySelector('.gantt-wrap');
+    if(!wrap) return;
+
+    // Rebuild structure
+    wrap.innerHTML = '';
+    const left = document.createElement('div'); left.id = 'ganttLabels'; left.className = 'left-col-outer'; wrap.appendChild(left);
+    const g = document.createElement('div'); g.id = 'gantt'; g.className = 'gantt'; wrap.appendChild(g);
+
+    // Avoid 0 width on first paint
+    const containerWidth = g.getBoundingClientRect().width || g.parentElement.getBoundingClientRect().width || 800;
+    const available = containerWidth - 24; // padding compensation
+    PX = Math.max(0.8, Math.min(2, available / Math.max(1, DAY_MINS)));
+
+    const inner = document.createElement('div'); inner.className = 'gantt-inner'; inner.style.width = (DAY_MINS * PX) + 'px'; g.appendChild(inner);
+
+    // Scale
+    const scale = document.createElement('div'); scale.className='scale';
+    const limit = DAY_MINS - (DAY_MINS % 60);
+    for(let t = 0; t < limit; t += 60){
+      const tick = document.createElement('div');
+      tick.className='tick';
+      tick.style.width = (60*PX)+'px';
+      tick.textContent = clockLabel(t);
+      scale.appendChild(tick);
+    }
+    const rem = DAY_MINS - limit;
+    if(rem){ const last = document.createElement('div'); last.className='tick'; last.style.width=(rem*PX)+'px'; last.style.textAlign='right'; last.style.paddingRight='2px'; last.style.borderRight='1px solid #e2e8f0'; last.textContent=clockLabel(DAY_MINS); scale.appendChild(last); }
+    inner.appendChild(scale);
+
+    const spacer = document.createElement('div'); const padTop = parseFloat(getComputedStyle(g).paddingTop)||0; const scaleMargin = parseFloat(getComputedStyle(scale).marginBottom)||0; const spacerH = padTop + scale.offsetHeight + scaleMargin; spacer.style.height = spacerH + 'px'; left.appendChild(spacer);
+
+    // Lanes
+    const lane1 = document.createElement('div'); lane1.className='lane';
+    const lane2 = document.createElement('div'); lane2.className='lane';
+    const laneDoc = document.createElement('div'); laneDoc.className='lane';
+    inner.appendChild(lane1); inner.appendChild(lane2); inner.appendChild(laneDoc);
+
+    ;['OR-1','OR-2','Doctor'].forEach(text=>{ const lr=document.createElement('div'); lr.className='label-row'; lr.textContent=text; left.appendChild(lr); });
+
+    const endLine = document.createElement('div'); endLine.style.position='absolute'; endLine.style.left=(DAY_MINS*PX)+'px'; endLine.style.top=spacerH+'px'; endLine.style.bottom='0'; endLine.style.width='1px'; endLine.style.background='#e2e8f0'; inner.appendChild(endLine);
+
+    // Paint blocks
+    for(const c of cases){
+      if(c.start == null || !c.room) continue;
+      const lane = c.room === 'OR1' ? lane1 : lane2;
+
+      const sStart = c.start, sEnd = sStart + safe(c.S);
+      const iStart = sEnd,    iEnd = iStart + safe(c.I);
+      const oStart = iEnd,    oEnd = oStart + safe(c.O);
+      const wStart = oEnd,    wEnd = wStart + safe(c.W);
+      const cStart = wEnd,    cEnd = cStart + safe(c.C);
+
+      // OR lane: S, I, O, W, C
+      addBlock('S', sStart, sEnd, lane, c.id);
+      addBlock('I', iStart, iEnd, lane, c.id);
+      addBlock('O', oStart, oEnd, lane, c.id);
+      addBlock('W', wStart, wEnd, lane, c.id);
+      addBlock('C', cStart, cEnd, lane, c.id);
+
+      // Doctor lane: O and F (F immediately after O)
+      addBlock('O', oStart, oEnd, laneDoc, c.id);
+      const fStart = oEnd, fEnd = fStart + safe(c.F);
+      addBlock('F', fStart, fEnd, laneDoc, c.id);
+    }
+  }
+
+  function render(){ renderTable(); renderGantt(); kpis(); }
+
+  // =====================
+  // Table rendering
+  // =====================
+  function renderTable(){
+    const tbody = document.querySelector('#tbl tbody'); if(!tbody) return; tbody.innerHTML = ''; const frag = document.createDocumentFragment();
+    for(const c of cases){
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><strong>${c.id}</strong></td>
+        <td><span class="badge">${c.status}</span></td>
+        <td>${Math.round(safe(c.O))}</td>
+        <td class="muted">${[c.S,c.I,c.W,c.C,c.F].map(x=>Math.round(safe(x))).join('/')}</td>
+        <td>${c.room||'—'}</td>
+        <td>${fmt(c.start)}</td>
+        <td>${c.locked? '🔒' : ''}</td>
+        <td class="right">
+          <button class="btn" data-act="lock">${c.locked? 'Unlock':'Lock'}</button>
+          <button class="btn" data-act="edit">Edit</button>
+          <button class="btn" data-act="del">Delete</button>
+        </td>`;
+
+      tr.querySelector('[data-act="lock"]').onclick = ()=>{ c.locked = !c.locked; render(); };
+      tr.querySelector('[data-act="edit"]').onclick = ()=>{
+        $('caseId').value = c.id;
+        $('oMin').value = c.O;
+        $('status').value = c.status;
+        $('lockSel').value = c.locked? 'yes':'no';
+        $('winStart').value = (c.winStart != null) ? toTimeInput(c.winStart) : '';
+        ;['S','I','W','C','F'].forEach(k=>{ const ck=$('ov'+k), iv=$('val'+k); if(ck&&iv){ ck.checked=true; iv.disabled=false; iv.value=c[k]; }});
+      };
+      tr.querySelector('[data-act="del"]').onclick = ()=>{ cases = cases.filter(x=>x.id !== c.id); render(); };
+
+      frag.appendChild(tr);
+    }
+    tbody.appendChild(frag);
+  }
+
+  // =====================
+  // Seed demo & first render
+  // =====================
+  (function seed(){
+    const d = defaults;
+    cases = [
+      {id:'C-001', O:60, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'confirmed', locked:true,  winStart:0,   start:null, room:null},
+      {id:'C-002', O:45, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'tentative', locked:false, winStart:0,   start:null, room:null},
+      {id:'C-003', O:90, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'confirmed', locked:false, winStart:60,  start:null, room:null}
+    ];
+    reoptimize();
+  })();
+
+  window.addEventListener('resize', render);
+  </script>
 </body>
 </html>
