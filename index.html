@@ -4,11 +4,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dual‑OR Scheduler — v2.5 (Downtime = 570 − OTIME − FTIME)</title>
+  <title>Dual‑OR Scheduler — v2.7 (OR Util = I+O+W)</title>
   <style>
-    /* =====================
-       Design tokens
-       ===================== */
     :root{
       --day-mins: 570;            /* 7:30–17:00 */
       --px-per-min: 2;            /* timeline scale */
@@ -24,13 +21,13 @@
       /* KPI colors */
       --idle-ok:#002d74; --idle-high:#f3c300;
 
-      /* === Stage colors (you can edit these) === */
+      /* === Stage colors === */
       --col-S:#e97132; --col-S-b:#c2410c; --col-S-t:#fff;  /* Setup */
       --col-I:#92d050; --col-I-b:#6aa84f; --col-I-t:#fff;  /* Induction */
       --col-O:#c00000; --col-O-b:#7f0000; --col-O-t:#fff;  /* Operation */
       --col-W:#00b0f0; --col-W-b:#0077a3; --col-W-t:#fff;  /* Wake-up */
       --col-C:#0b76a0; --col-C-b:#064d66; --col-C-t:#fff;  /* Clean-up */
-      --col-F:#d86ecc; --col-F-b:#a8329b; --col-F-t:#fff;  /* Family comm (Doctor only) */
+      --col-F:#d86ecc; --col-F-b:#a8329b; --col-F-t:#fff;  /* Family comm */
     }
 
     *,*::before,*::after{ box-sizing:border-box; }
@@ -96,13 +93,12 @@
     .block .label{ font-size:12px; font-weight:700; padding:2px 6px; }
     .block.locked{ outline:2px dashed rgba(0,0,0,.15); }
 
-    /* Stage color classes */
     .block.S{ background:var(--col-S); border:1px solid var(--col-S-b); color:var(--col-S-t);} /* Setup */
     .block.I{ background:var(--col-I); border:1px solid var(--col-I-b); color:var(--col-I-t);} /* Induction */
     .block.O{ background:var(--col-O); border:1px solid var(--col-O-b); color:var(--col-O-t);} /* Operation */
     .block.W{ background:var(--col-W); border:1px solid var(--col-W-b); color:var(--col-W-t);} /* Wake-up */
     .block.C{ background:var(--col-C); border:1px solid var(--col-C-b); color:var(--col-C-t);} /* Clean-up */
-    .block.F{ background:var(--col-F); border:1px solid var(--col-F-b); color:var(--col-F-t);} /* Family comm. (Doctor only) */
+    .block.F{ background:var(--col-F); border:1px solid var(--col-F-b); color:var(--col-F-t);} /* Family comm */
 
     table{ width:100%; border-collapse:collapse; font-size:13px; }
     th,td{ padding:8px; border-bottom:1px solid var(--line-2); text-align:left; }
@@ -117,7 +113,7 @@
 <body>
   <header>
     <h1>Dual‑OR Scheduler</h1>
-    <div class="sub">Mode: <span class="badge" id="modeLabel">Plan Builder</span> · Day length 570 min (≈ 07:30–17:00)</div>
+    <div class="sub">Mode: <span class="badge" id="modeLabel">Plan Builder</span> · Day length 570 min (≈ 07:30–17:00) · <span class="badge">Doctor busy = O + F</span> · <span class="badge">OR Util = I+O+W</span></div>
   </header>
 
   <div class="container">
@@ -145,7 +141,7 @@
           <small>Surgeon downtime (est.)</small>
           <div style="font-size:22px; font-weight:800" id="kpiIdle">0 min</div>
           <div style="font-size:12px" id="kpiUtil">OR1 — 0% · OR2 — 0%</div>
-          <div style="font-size:11px; opacity:.85">Formula: 570 − OTIME − FTIME</div>
+          <div style="font-size:11px; opacity:.85">Doctor downtime = 570 − OTIME − FTIME · OR Util = (I+O+W)/570</div>
         </div>
       </div>
 
@@ -204,8 +200,8 @@
           <button class="btn" id="btnClear">Clear Form</button>
           <button class="btn ghost" id="btnReopt">Re‑optimize</button>
         </div>
-        <div style="margin-top:6px" class="muted">Defaults: S 7.5, I 20, W 20, C 7.5, F 10 (min). Surgeon engaged during O; see Doctor lane for O & F.</div>
-        <div id="notice" class="notice">⚠️ Some cases could not be placed within the day window. Consider unlocking, adjusting start windows, or durations.</div>
+        <div style="margin-top:6px" class="muted">Defaults: S 7.5, I 20, W 20, C 7.5, F 10 (min). Doctor O+F 不可重疊；OR 利用率僅計 I+O+W。</div>
+        <div id="notice" class="notice">⚠️ 有些個案無法排進視窗，試著解鎖、調整開始時間或時長。</div>
       </div>
     </div>
 
@@ -246,53 +242,54 @@
   </div>
 
   <script>
-  // =====================
-  // State & constants
-  // =====================
   const DAY_MINS = 570; // minutes in day window
   let PX = 2;           // pixels per minute (responsive)
   const defaults = { S: 7.5, I: 20, W: 20, C: 7.5, F: 10 };
-  let cases = []; // {id,O,S,I,W,C,F,status,locked,winStart,start,room}
+  let cases = [];
   let mode = 'plan';
   let seq = 1;
 
-  // Helpers
   const $ = (id) => document.getElementById(id);
   const nowStr = () => new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
   const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
   const nnum = (v, fb) => { const n = parseFloat(v); return Number.isFinite(n) ? n : fb; };
   const safe = (x) => { const n = Number(x); return Number.isFinite(n) ? n : 0; };
 
-  // Convert minutes from 07:30 origin to clock label
   const START_H = 7, START_M = 30;
   function clockLabel(min){ const total = START_H*60 + START_M + min; const h = Math.floor(total/60), m = total%60; return `${h}:${String(m).padStart(2,'0')}`; }
   function fmt(min){ return (min==null) ? '—' : clockLabel(min); }
-  function toRelMinutes(t){ if(!t) return NaN; const parts = t.split(':'); if(parts.length !== 2) return NaN; const hh = parseInt(parts[0], 10), mm = parseInt(parts[1], 10); if(!Number.isFinite(hh)||!Number.isFinite(mm)) return NaN; const abs = hh*60 + mm; const origin = START_H*60 + START_M; return abs - origin; }
+  function toRelMinutes(t){ if(!t) return NaN; const [hh,mm] = t.split(':').map(Number); if(!Number.isFinite(hh)||!Number.isFinite(mm)) return NaN; const origin = START_H*60 + START_M; return hh*60 + mm - origin; }
   function toTimeInput(min){ if(min==null) return ''; const origin=START_H*60+START_M; const abs = origin + min; const h=Math.floor(abs/60), m=abs%60; return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); }
 
-  // Durations (F excluded from OR occupancy)
-  const durOR = (c) => safe(c.S) + safe(c.I) + safe(c.O) + safe(c.W) + safe(c.C);
-  const durTotal = (c) => durOR(c) + safe(c.F);
+  // Durations helpers
+  const durOR = (c) => safe(c.S) + safe(c.I) + safe(c.O) + safe(c.W) + safe(c.C); // OR occupancy (engineering)
+  const durIOW = (c) => safe(c.I) + safe(c.O) + safe(c.W);                          // OR utilization (reporting)
 
-  // Feasibility: OR block only uses S/I/O/W/C; surgeon O cannot overlap across cases
+  // Feasibility rules: Doctor O+F 不重疊；同一 OR 的 S/I/O/W/C 不重疊。
   function feasibleAt(c, start, room){
     const end = start + durOR(c);
     if(start < (c.winStart||0) || end > DAY_MINS) return false;
 
     const cOs = start + safe(c.S) + safe(c.I);
     const cOe = cOs + safe(c.O);
+    const cFe = cOe + safe(c.F);
+
+    // Doctor O+F no overlap
     for(const x of cases){
       if(x === c || x.start == null) continue;
       const xOs = x.start + safe(x.S) + safe(x.I);
       const xOe = xOs + safe(x.O);
-      if(!(cOe <= xOs || xOe <= cOs)) return false; // overlap in O times => not feasible
+      const xFe = xOe + safe(x.F);
+      if(!(cFe <= xOs || xFe <= cOs)) return false;
     }
 
+    // OR occupancy no overlap (S/I/O/W/C) in same room
     for(const x of cases){
       if(x === c || x.start == null || x.room !== room) continue;
       const b1s = start, b1e = end, b2s = x.start, b2e = x.start + durOR(x);
-      if(!(b1e <= b2s || b2e <= b1s)) return false; // OR block overlap
+      if(!(b1e <= b2s || b2e <= b1s)) return false;
     }
+
     return true;
   }
 
@@ -321,9 +318,7 @@
   function scheduleGap(){ for(const c of cases){ if(c.start == null) placeEarliest(c); } }
   function reoptimize(){ (mode === 'plan') ? schedulePlan() : scheduleGap(); render(); }
 
-  // =====================
   // UI wiring
-  // =====================
   const btnPlan = $('btnPlan');
   const btnGap  = $('btnGap');
   const modeLabel = $('modeLabel');
@@ -370,9 +365,7 @@
     if($('lockSel')) $('lockSel').value='no';
   }
 
-  // =====================
-  // KPIs
-  // =====================
+  // KPIs & Utilization
   function kpis(){
     const count = cases.filter(c=>['confirmed','tentative','emergency'].includes(c.status)).length;
     const conf  = cases.filter(c=>c.status==='confirmed').length;
@@ -382,18 +375,17 @@
     $('kpiBreak').textContent = `Confirmed ${conf} · Tentative ${tent} · Emerg ${emerg}`;
     $('kpiUpdated').textContent = `Last updated ${nowStr()}`;
 
-    // === NEW: Surgeon downtime = 570 − OTIME − FTIME ===
-    // OTIME: total (non-overlapping) O minutes. Overlap is already prevented between cases' O by feasibility rule.
+    // Doctor downtime = 570 − OTIME − FTIME
     const Otime = cases.filter(c=>c.start!=null).reduce((sum,c)=> sum + safe(c.O), 0);
     const Ftime = cases.filter(c=>c.start!=null).reduce((sum,c)=> sum + safe(c.F), 0);
     const idle = clamp(DAY_MINS - Otime - Ftime, 0, DAY_MINS);
     $('kpiIdle').textContent = `${Math.round(idle)} min`;
 
-    // OR utilizations exclude F (unchanged)
-    const occ = { OR1:0, OR2:0 };
-    for(const c of cases){ if(c.start==null||!c.room) continue; occ[c.room] += durOR(c); }
-    const u1raw = cases.some(c=>c.room==='OR1') ? Math.round((occ.OR1/DAY_MINS)*100) : 0;
-    const u2raw = cases.some(c=>c.room==='OR2') ? Math.round((occ.OR2/DAY_MINS)*100) : 0;
+    // OR utilization per room = (sum of I+O+W in that room) / DAY_MINS
+    const occIOW = { OR1:0, OR2:0 };
+    for(const c of cases){ if(c.start==null||!c.room) continue; occIOW[c.room] += durIOW(c); }
+    const u1raw = cases.some(c=>c.room==='OR1') ? Math.round((occIOW.OR1/DAY_MINS)*100) : 0;
+    const u2raw = cases.some(c=>c.room==='OR2') ? Math.round((occIOW.OR2/DAY_MINS)*100) : 0;
     const u1 = clamp(u1raw,0,100), u2 = clamp(u2raw,0,100);
     $('kpiUtil').textContent = `OR1 — ${u1}% · OR2 — ${u2}%`;
 
@@ -401,9 +393,7 @@
     const idleCard = document.getElementById('kpiIdleCard'); if(idleCard){ idleCard.classList.toggle('high', idle >= 60); }
   }
 
-  // =====================
   // Gantt rendering
-  // =====================
   function addBlock(kind, start, end, lane, id){
     if(end<=start) return;
     const div = document.createElement('div');
@@ -418,19 +408,16 @@
     const wrap = document.querySelector('.gantt-wrap');
     if(!wrap) return;
 
-    // Rebuild structure
     wrap.innerHTML = '';
     const left = document.createElement('div'); left.id = 'ganttLabels'; left.className = 'left-col-outer'; wrap.appendChild(left);
     const g = document.createElement('div'); g.id = 'gantt'; g.className = 'gantt'; wrap.appendChild(g);
 
-    // Avoid 0 width on first paint
     const containerWidth = g.getBoundingClientRect().width || g.parentElement.getBoundingClientRect().width || 800;
-    const available = containerWidth - 24; // padding compensation
+    const available = containerWidth - 24;
     PX = Math.max(0.8, Math.min(2, available / Math.max(1, DAY_MINS)));
 
     const inner = document.createElement('div'); inner.className = 'gantt-inner'; inner.style.width = (DAY_MINS * PX) + 'px'; g.appendChild(inner);
 
-    // Scale
     const scale = document.createElement('div'); scale.className='scale';
     const limit = DAY_MINS - (DAY_MINS % 60);
     for(let t = 0; t < limit; t += 60){
@@ -446,7 +433,6 @@
 
     const spacer = document.createElement('div'); const padTop = parseFloat(getComputedStyle(g).paddingTop)||0; const scaleMargin = parseFloat(getComputedStyle(scale).marginBottom)||0; const spacerH = padTop + scale.offsetHeight + scaleMargin; spacer.style.height = spacerH + 'px'; left.appendChild(spacer);
 
-    // Lanes
     const lane1 = document.createElement('div'); lane1.className='lane';
     const lane2 = document.createElement('div'); lane2.className='lane';
     const laneDoc = document.createElement('div'); laneDoc.className='lane';
@@ -456,7 +442,6 @@
 
     const endLine = document.createElement('div'); endLine.style.position='absolute'; endLine.style.left=(DAY_MINS*PX)+'px'; endLine.style.top=spacerH+'px'; endLine.style.bottom='0'; endLine.style.width='1px'; endLine.style.background='#e2e8f0'; inner.appendChild(endLine);
 
-    // Paint blocks
     for(const c of cases){
       if(c.start == null || !c.room) continue;
       const lane = c.room === 'OR1' ? lane1 : lane2;
@@ -467,14 +452,12 @@
       const wStart = oEnd,    wEnd = wStart + safe(c.W);
       const cStart = wEnd,    cEnd = cStart + safe(c.C);
 
-      // OR lane: S, I, O, W, C
       addBlock('S', sStart, sEnd, lane, c.id);
       addBlock('I', iStart, iEnd, lane, c.id);
       addBlock('O', oStart, oEnd, lane, c.id);
       addBlock('W', wStart, wEnd, lane, c.id);
       addBlock('C', cStart, cEnd, lane, c.id);
 
-      // Doctor lane: O and F (F immediately after O)
       addBlock('O', oStart, oEnd, laneDoc, c.id);
       const fStart = oEnd, fEnd = fStart + safe(c.F);
       addBlock('F', fStart, fEnd, laneDoc, c.id);
@@ -483,9 +466,6 @@
 
   function render(){ renderTable(); renderGantt(); kpis(); }
 
-  // =====================
-  // Table rendering
-  // =====================
   function renderTable(){
     const tbody = document.querySelector('#tbl tbody'); if(!tbody) return; tbody.innerHTML = ''; const frag = document.createDocumentFragment();
     for(const c of cases){
@@ -520,9 +500,6 @@
     tbody.appendChild(frag);
   }
 
-  // =====================
-  // Seed demo & first render
-  // =====================
   (function seed(){
     const d = defaults;
     cases = [
