@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dual‑OR Scheduler — v2.5 (Stage Colors, F after O)</title>
+  <title>Dual‑OR Scheduler — v2.5 (Downtime = 570 − OTIME − FTIME)</title>
   <style>
     /* =====================
        Design tokens
@@ -145,7 +145,7 @@
           <small>Surgeon downtime (est.)</small>
           <div style="font-size:22px; font-weight:800" id="kpiIdle">0 min</div>
           <div style="font-size:12px" id="kpiUtil">OR1 — 0% · OR2 — 0%</div>
-          <div style="font-size:11px; opacity:.85">Objective: minimize downtime</div>
+          <div style="font-size:11px; opacity:.85">Formula: 570 − OTIME − FTIME</div>
         </div>
       </div>
 
@@ -382,12 +382,14 @@
     $('kpiBreak').textContent = `Confirmed ${conf} · Tentative ${tent} · Emerg ${emerg}`;
     $('kpiUpdated').textContent = `Last updated ${nowStr()}`;
 
-    // Surgeon downtime: gaps between O blocks (union)
-    const ops = cases.filter(c=>c.start!=null).map(c=>({ os: c.start + safe(c.S) + safe(c.I), oe: c.start + safe(c.S) + safe(c.I) + safe(c.O) })).sort((a,b)=> a.os-b.os);
-    let idle=0, cur=0; for(const o of ops){ if(o.os>cur) idle += (o.os-cur); cur = Math.max(cur, o.oe); }
+    // === NEW: Surgeon downtime = 570 − OTIME − FTIME ===
+    // OTIME: total (non-overlapping) O minutes. Overlap is already prevented between cases' O by feasibility rule.
+    const Otime = cases.filter(c=>c.start!=null).reduce((sum,c)=> sum + safe(c.O), 0);
+    const Ftime = cases.filter(c=>c.start!=null).reduce((sum,c)=> sum + safe(c.F), 0);
+    const idle = clamp(DAY_MINS - Otime - Ftime, 0, DAY_MINS);
     $('kpiIdle').textContent = `${Math.round(idle)} min`;
 
-    // OR utilizations exclude F
+    // OR utilizations exclude F (unchanged)
     const occ = { OR1:0, OR2:0 };
     for(const c of cases){ if(c.start==null||!c.room) continue; occ[c.room] += durOR(c); }
     const u1raw = cases.some(c=>c.room==='OR1') ? Math.round((occ.OR1/DAY_MINS)*100) : 0;
