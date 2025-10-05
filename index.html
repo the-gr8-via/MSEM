@@ -1,10 +1,10 @@
-<!-- 顏慈瑩2025.10.5 -->
+<!-- 顏慈瑩2025.10.5 / 30秒粒度版 -->
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dual‑OR Scheduler — v2.7 (OR Util = I+O+W)</title>
+  <title>Dual‑OR Scheduler — v2.7 (OR Util = I+O+W, 30s step)</title>
   <style>
     :root{
       --day-mins: 570;            /* 7:30–17:00 */
@@ -113,7 +113,7 @@
 <body>
   <header>
     <h1>Dual‑OR Scheduler</h1>
-    <div class="sub">Mode: <span class="badge" id="modeLabel">Plan Builder</span> · Day length 570 min (≈ 07:30–17:00) · <span class="badge">Doctor busy = O + F</span> · <span class="badge">OR Util = I+O+W</span></div>
+    <div class="sub">Mode: <span class="badge" id="modeLabel">Plan Builder</span> · Day length 570 min (≈ 07:30–17:00) · <span class="badge">Doctor busy = O + F</span> · <span class="badge">OR Util = I+O+W</span> · <span class="badge">Step = 0.5 min</span></div>
   </header>
 
   <div class="container">
@@ -154,7 +154,7 @@
           </div>
           <div>
             <label for="oMin">Operation (O) min *</label>
-            <input type="number" id="oMin" min="10" step="5" placeholder="e.g., 60" />
+            <input type="number" id="oMin" min="10" step="0.5" placeholder="e.g., 60" />
           </div>
           <div>
             <label for="winStart">Earliest start (HH:MM, optional)</label>
@@ -188,11 +188,11 @@
         </div>
 
         <div class="checkbox-row">
-          <label><input type="checkbox" id="ovS"> Set up <input type="number" id="valS" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
-          <label><input type="checkbox" id="ovI"> Induction <input type="number" id="valI" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
-          <label><input type="checkbox" id="ovW"> Wake up <input type="number" id="valW" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
-          <label><input type="checkbox" id="ovC"> Clean up <input type="number" id="valC" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
-          <label><input type="checkbox" id="ovF"> Family comm. <input type="number" id="valF" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovS"> Set up <input type="number" id="valS" min="0" step="0.5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovI"> Induction <input type="number" id="valI" min="0" step="0.5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovW"> Wake up <input type="number" id="valW" min="0" step="0.5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovC"> Clean up <input type="number" id="valC" min="0" step="0.5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovF"> Family comm. <input type="number" id="valF" min="0" step="0.5" placeholder="min" style="width:68px" disabled></label>
         </div>
 
         <div class="btn-row">
@@ -256,10 +256,10 @@
   const safe = (x) => { const n = Number(x); return Number.isFinite(n) ? n : 0; };
 
   const START_H = 7, START_M = 30;
-  function clockLabel(min){ const total = START_H*60 + START_M + min; const h = Math.floor(total/60), m = total%60; return `${h}:${String(m).padStart(2,'0')}`; }
+  function clockLabel(min){ const total = START_H*60 + START_M + min; const h = Math.floor(total/60), m = Math.round((total%60)*100)/100; const mm = String(Math.floor(m)).padStart(2,'0'); return `${h}:${mm}`; }
   function fmt(min){ return (min==null) ? '—' : clockLabel(min); }
   function toRelMinutes(t){ if(!t) return NaN; const [hh,mm] = t.split(':').map(Number); if(!Number.isFinite(hh)||!Number.isFinite(mm)) return NaN; const origin = START_H*60 + START_M; return hh*60 + mm - origin; }
-  function toTimeInput(min){ if(min==null) return ''; const origin=START_H*60+START_M; const abs = origin + min; const h=Math.floor(abs/60), m=abs%60; return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); }
+  function toTimeInput(min){ if(min==null) return ''; const origin=START_H*60+START_M; const abs = origin + min; const h=Math.floor(abs/60), m=abs%60; return String(h).padStart(2,'0')+':'+String(Math.floor(m)).padStart(2,'0'); }
 
   // Durations helpers
   const durOR = (c) => safe(c.S) + safe(c.I) + safe(c.O) + safe(c.W) + safe(c.C); // OR occupancy (engineering)
@@ -294,9 +294,9 @@
   }
 
   function placeEarliest(c, rooms=['OR1','OR2']){
-    const step = 5;
+    const step = 0.5; // ★ 30秒粒度（分鐘為單位）
     for(const room of rooms){
-      for(let t = Math.max(0, c.winStart||0); t + durOR(c) <= DAY_MINS; t += step){
+      for(let t = Math.max(0, c.winStart||0); t + durOR(c) <= DAY_MINS + 1e-9; t = Math.round((t + step)*2)/2){
         if(feasibleAt(c, t, room)){ c.start = t; c.room = room; return true; }
       }
     }
@@ -474,7 +474,7 @@
         <td><strong>${c.id}</strong></td>
         <td><span class="badge">${c.status}</span></td>
         <td>${Math.round(safe(c.O))}</td>
-        <td class="muted">${[c.S,c.I,c.W,c.C,c.F].map(x=>Math.round(safe(x))).join('/')}</td>
+        <td class="muted">${[c.S,c.I,c.W,c.C,c.F].map(x=>Number.isInteger(x)?x:x.toFixed(1)).join('/')}</td>
         <td>${c.room||'—'}</td>
         <td>${fmt(c.start)}</td>
         <td>${c.locked? '🔒' : ''}</td>
