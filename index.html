@@ -1,10 +1,10 @@
-<!-- 顏慈瑩 2025.10.5 v22 -->
+<!-- 顏慈瑩 2025.10.5 v24 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dual‑OR Scheduler — v2.5 (Downtime = 570 − OTIME − FTIME)</title>
+  <title>Dual‑OR Scheduler</title>
   <style>
     /* =====================
        Design tokens
@@ -183,13 +183,6 @@
             </select>
           </div>
           <div>
-            <label for="priority">Priority</label>
-            <select id="priority">
-              <option value="elective">Elective</option>
-              <option value="emergency">Emergency</option>
-            </select>
-          </div>
-          <div>
             <label for="lockSel">Lock</label>
             <select id="lockSel">
               <option value="no">No</option>
@@ -238,7 +231,6 @@
             <tr>
               <th>ID</th>
               <th>Status</th>
-              <th>Prio.</th>
               <th>O</th>
               <th>S/I/W/C/F</th>
               <th>Room</th>
@@ -271,7 +263,8 @@
   const DAY_MINS = 570; // minutes in day window (7:30 to 17:00)
   let PX = 2;           // pixels per minute (responsive)
   const defaults = { S: 7.5, I: 20, W: 20, C: 7.5, F: 10 };
-  let cases = []; // {id,O,S,I,W,C,F,status,priority,locked,winStart,start,room} 
+  // {id,O,S,I,W,C,F,status,locked,winStart,start,room}
+  let cases = [];
   let seq = 1;
 
   const $ = (id) => document.getElementById(id);
@@ -357,12 +350,15 @@
     cases.forEach(c => { if (!c.locked) { c.start = null; c.room = null; } });
     const locked = cases.filter(c=>c.locked);
     const unlocked = cases.filter(c=>!c.locked);
+
     locked.sort((a,b)=> (a.start ?? a.winStart ?? 0) - (b.start ?? b.winStart ?? 0));
     for(const c of locked){ if(c.start == null) placeEarliest(c); }
+
+    // Priority logic now based on STATUS only: emergency first, then by window start
     unlocked.sort((a,b) => {
-        const priorityA = a.priority === 'emergency' ? 0 : 1;
-        const priorityB = b.priority === 'emergency' ? 0 : 1;
-        if (priorityA !== priorityB) return priorityA - priorityB;
+        const ra = a.status === 'emergency' ? 0 : 1;
+        const rb = b.status === 'emergency' ? 0 : 1;
+        if (ra !== rb) return ra - rb;
         return (a.winStart ?? 0) - (b.winStart ?? 0);
     });
     for(const c of unlocked){ placeEarliest(c); }
@@ -419,12 +415,11 @@
     const C = $('ovC')?.checked ? nnum($('valC').value, defaults.C) : defaults.C;
     const F = $('ovF')?.checked ? nnum($('valF').value, defaults.F) : defaults.F;
     const status = $('status').value;
-    const priority = $('priority').value;
     const locked = $('lockSel').value === 'yes';
     const wsStr = $('winStart').value; const ws = toRelMinutes(wsStr);
     const winStart = Number.isFinite(ws) ? clamp(ws, 0, DAY_MINS) : 0;
     const idx = cases.findIndex(x=>x.id === idTxt);
-    const data = { id:idTxt, O, S, I, W, C, F, status, priority, locked, winStart }; 
+    const data = { id:idTxt, O, S, I, W, C, F, status, locked, winStart }; 
     if(idx >= 0){ cases[idx] = Object.assign(cases[idx], data); }
     else { cases.push(Object.assign({ start:null, room:null }, data)); }
     reoptimize();
@@ -445,7 +440,6 @@
       }
     });
     if($('status')) $('status').value='confirmed';
-    if($('priority')) $('priority').value='elective'; 
     if($('lockSel')) $('lockSel').value='no';
   }
 
@@ -545,8 +539,8 @@
       const sStart = c.start, sEnd = sStart + safe(c.S);
       const iStart = sEnd,    iEnd = iStart + safe(c.I);
       const oStart = iEnd,    oEnd = oStart + safe(c.O);
-      const wStart = oEnd,    wEnd = wStart + safe(c.W); // ✅ FIX: W immediately after O
-      const cStart = wEnd,    cEnd = cStart + safe(c.C); // ✅ FIX: C immediately after W
+      const wStart = oEnd,    wEnd = wStart + safe(c.W); // W immediately after O
+      const cStart = wEnd,    cEnd = cStart + safe(c.C); // C immediately after W
 
       // OR lane: S, I, O, W, C
       addBlock('S '+isLocked, sStart, sEnd, lane, c.id);
@@ -571,7 +565,6 @@
       tr.innerHTML = `
         <td><strong>${c.id}</strong></td>
         <td><span class="badge">${c.status}</span></td>
-        <td><span class="badge" style="${c.priority === 'emergency' ? 'background:#fee2e2; color:#b91c1c; border-color:#fca5a5;' : ''}">${c.priority}</span></td>
         <td>${safe(c.O).toFixed(1)}</td>
         <td class="muted">${[c.S,c.I,c.W,c.C,c.F].map(x=>safe(x).toFixed(1)).join('/')}</td>
         <td>${c.room||'—'}</td>
@@ -579,29 +572,10 @@
         <td>${c.locked? '🔒' : ''}</td>
         <td class="right">
           <button class="btn" data-act="lock">${c.locked? 'Unlock':'Lock'}</button>
-          <button class="btn" data-act="edit">Edit</button>
           <button class="btn" data-act="del">Delete</button>
         </td>`;
 
       tr.querySelector('[data-act="lock"]').onclick = ()=>{ c.locked = !c.locked; reoptimize(); };
-      tr.querySelector('[data-act="edit"]').onclick = ()=>{
-        $('caseId').value = c.id;
-        $('oMin').value = c.O;
-        $('status').value = c.status;
-        $('priority').value = c.priority;
-        $('lockSel').value = c.locked? 'yes':'no';
-        $('winStart').value = (c.winStart != null) ? toTimeInput(c.winStart) : '';
-        ['S','I','W','C','F'].forEach(k=>{
-          const ck=$('ov'+k), iv=$('val'+k);
-          if(ck&&iv){
-            const storedValue = safe(c[k]);
-            const isOverridden = storedValue !== defaults[k];
-            ck.checked = isOverridden;
-            iv.disabled = !isOverridden;
-            iv.value = storedValue;
-          }
-        });
-      };
       tr.querySelector('[data-act="del"]').onclick = ()=>{ cases = cases.filter(x=>x.id !== c.id); reoptimize(); };
       frag.appendChild(tr);
     }
@@ -624,12 +598,10 @@
     let orEndTime = fmt(c.start + durOR(c));
     let surgeonEndTime = fmt(c.start + safe(c.S) + safe(c.I) + safe(c.O) + safe(c.F));
     const statusText = c.status === 'confirmed' ? 'Confirmed' : c.status === 'tentative' ? 'Tentative' : 'Emergency Hold';
-    const priorityText = c.priority === 'emergency' ? 'Emergency 🚨' : 'Elective';
     const lockText = c.locked ? 'Yes 🔒' : 'No';
     const winStartText = c.winStart ? fmt(c.winStart) : 'Any Time (07:30)';
     detailBody.innerHTML = `
         <strong>Status:</strong> <span>${statusText}</span>
-        <strong>Priority:</strong> <span>${priorityText}</span>
         <strong>Assigned Room:</strong> <span>${c.room || 'Unassigned'}</span>
         <strong>Actual Start Time:</strong> <span>${startTime}</span>
         
@@ -658,14 +630,13 @@
   (function seed(){
     const d = defaults;
     cases = [
-      {id:'1', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'confirmed', priority:'elective', locked:true,  winStart:0,   start:null, room:null},
-      {id:'2', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'tentative', priority:'emergency', locked:false, winStart:0,   start:null, room:null},
-      {id:'3', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'confirmed', priority:'elective', locked:true, winStart:60,  start:null, room:null},
-      {id:'4', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'tentative', priority:'emergency', locked:false, winStart:0,   start:null, room:null},
-      {id:'5', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'tentative', priority:'emergency', locked:false, winStart:0,   start:null, room:null},
-      {id:'6', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'tentative', priority:'emergency', locked:false, winStart:0,   start:null, room:null},
-      {id:'7', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'tentative', priority:'emergency', locked:false, winStart:0,   start:null, room:null}
-
+      {id:'1', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'confirmed',  locked:true,  winStart:0,   start:null, room:null},
+      {id:'2', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'emergency', locked:false, winStart:0,   start:null, room:null},
+      {id:'3', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'confirmed',  locked:true,  winStart:60,  start:null, room:null},
+      {id:'4', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'emergency', locked:false, winStart:0,   start:null, room:null},
+      {id:'5', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'emergency', locked:false, winStart:0,   start:null, room:null},
+      {id:'6', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'emergency', locked:false, winStart:0,   start:null, room:null},
+      {id:'7', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'emergency', locked:false, winStart:0,   start:null, room:null}
     ];
     reoptimize();
   })();
