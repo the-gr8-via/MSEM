@@ -1,10 +1,10 @@
-<!-- 顏慈瑩2025.10.5 / 30秒粒度版 -->
+<!-- 顏慈瑩2025.10.5 / Plan-Only + 30秒粒度 / 無最上方副標 -->
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dual‑OR Scheduler — v2.7 (OR Util = I+O+W, 30s step)</title>
+  <title>Dual‑OR Scheduler — v2.7 (Plan‑Only, OR Util = I+O+W, 30s step)</title>
   <style>
     :root{
       --day-mins: 570;            /* 7:30–17:00 */
@@ -62,10 +62,6 @@
     .btn.primary{ background: var(--primary); border-color: var(--primary); color:#fff; }
     .btn.ghost{ background:transparent; }
 
-    .mode{ display:inline-flex; background:#eef2ff; border-radius:10px; overflow:hidden; border:1px solid #c7d2fe; }
-    .mode button{ border:none; padding:8px 12px; font-weight:700; color:#334155; background:transparent; cursor:pointer; }
-    .mode button.active{ background:var(--primary-2); color:#fff; }
-
     .kpis{ display:grid; grid-template-columns: repeat(2,1fr); gap:8px; margin-bottom:10px; }
     .kpi{ background:#4e6d9e; color:#fff; border-radius:10px; padding:10px 12px; }
     .kpi small{ opacity:.85; display:block; font-weight:500; }
@@ -113,22 +109,13 @@
 <body>
   <header>
     <h1>Dual‑OR Scheduler</h1>
-    <div class="sub">Mode: <span class="badge" id="modeLabel">Plan Builder</span> · Day length 570 min (≈ 07:30–17:00) · <span class="badge">Doctor busy = O + F</span> · <span class="badge">OR Util = I+O+W</span> · <span class="badge">Step = 0.5 min</span></div>
+    <!-- 已移除最上方副標資訊列 -->
   </header>
 
   <div class="container">
     <!-- LEFT: Controls -->
     <div class="card">
       <h2>Controls</h2>
-      <div class="section">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-          <label><strong>Mode</strong></label>
-          <div class="mode" role="tablist" aria-label="Mode switch">
-            <button id="btnPlan" class="active" aria-pressed="true">Plan Builder</button>
-            <button id="btnGap" aria-pressed="false">Gap Filler</button>
-          </div>
-        </div>
-      </div>
 
       <div class="section kpis">
         <div class="kpi">
@@ -200,7 +187,7 @@
           <button class="btn" id="btnClear">Clear Form</button>
           <button class="btn ghost" id="btnReopt">Re‑optimize</button>
         </div>
-        <div style="margin-top:6px" class="muted">Defaults: S 7.5, I 20, W 20, C 7.5, F 10 (min). Doctor O+F 不可重疊；OR 利用率僅計 I+O+W。</div>
+        <div style="margin-top:6px" class="muted">Defaults: S 7.5, I 20, W 20, C 7.5, F 10 (min).</div>
         <div id="notice" class="notice">⚠️ 有些個案無法排進視窗，試著解鎖、調整開始時間或時長。</div>
       </div>
     </div>
@@ -246,8 +233,7 @@
   let PX = 2;           // pixels per minute (responsive)
   const defaults = { S: 7.5, I: 20, W: 20, C: 7.5, F: 10 };
   let cases = [];
-  let mode = 'plan';
-  let seq = 1;
+  let seq = 1;          // plan only
 
   const $ = (id) => document.getElementById(id);
   const nowStr = () => new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
@@ -294,7 +280,7 @@
   }
 
   function placeEarliest(c, rooms=['OR1','OR2']){
-    const step = 0.5; // ★ 30秒粒度（分鐘為單位）
+    const step = 0.5; // 30秒粒度
     for(const room of rooms){
       for(let t = Math.max(0, c.winStart||0); t + durOR(c) <= DAY_MINS + 1e-9; t = Math.round((t + step)*2)/2){
         if(feasibleAt(c, t, room)){ c.start = t; c.room = room; return true; }
@@ -315,17 +301,9 @@
     for(const c of unlocked){ placeEarliest(c); }
   }
 
-  function scheduleGap(){ for(const c of cases){ if(c.start == null) placeEarliest(c); } }
-  function reoptimize(){ (mode === 'plan') ? schedulePlan() : scheduleGap(); render(); }
+  function reoptimize(){ schedulePlan(); render(); }
 
-  // UI wiring
-  const btnPlan = $('btnPlan');
-  const btnGap  = $('btnGap');
-  const modeLabel = $('modeLabel');
-  if(btnPlan){ btnPlan.onclick = ()=>{ mode='plan'; btnPlan.classList.add('active'); btnGap.classList.remove('active'); modeLabel.textContent='Plan Builder'; render(); }; }
-  if(btnGap){  btnGap.onclick  = ()=>{ mode='gap';  btnGap.classList.add('active');  btnPlan.classList.remove('active'); modeLabel.textContent='Gap Filler';  render(); }; }
-  document.addEventListener('keydown', (e)=>{ if(e.key==='ArrowLeft'){ btnPlan?.click(); } if(e.key==='ArrowRight'){ btnGap?.click(); } });
-
+  // UI wiring (Plan only)
   ;['S','I','W','C','F'].forEach(k=>{ const ck=$('ov'+k), iv=$('val'+k); if(ck && iv){ ck.addEventListener('change', ()=>{ iv.disabled = !ck.checked; if(iv.disabled) iv.value=''; }); } });
 
   const addBtn = $('btnAdd');
@@ -350,7 +328,7 @@
     if(idx >= 0){ cases[idx] = Object.assign(cases[idx], data); }
     else { cases.push(Object.assign({ start:null, room:null }, data)); }
 
-    (mode === 'plan') ? reoptimize() : render();
+    reoptimize();
     clearForm();
   }; }
 
