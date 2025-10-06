@@ -133,7 +133,7 @@
 <body>
   <header>
     <h1>Dual‑OR Scheduler</h1>
-    <div class="sub">Mode: Plan Builder (Fixed) · Day length 570 min (≈ 07:30–17:00)</div>
+    <div class="sub">Day length 570 min (≈ 07:30–17:00)</div>
   </header>
 
   <div class="container">
@@ -658,9 +658,14 @@
   (function seed(){
     const d = defaults;
     cases = [
-      {id:'C-001', O:60, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'confirmed', priority:'elective', locked:true,  winStart:0,   start:null, room:null},
-      {id:'C-002', O:45, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'tentative', priority:'emergency', locked:false, winStart:0,   start:null, room:null},
-      {id:'C-003', O:90, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'confirmed', priority:'elective', locked:true, winStart:60,  start:null, room:null}
+      {id:'1', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'confirmed', priority:'elective', locked:true,  winStart:0,   start:null, room:null},
+      {id:'2', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'tentative', priority:'emergency', locked:false, winStart:0,   start:null, room:null},
+      {id:'3', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'confirmed', priority:'elective', locked:true, winStart:60,  start:null, room:null},
+      {id:'4', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'tentative', priority:'emergency', locked:false, winStart:0,   start:null, room:null},
+      {id:'5', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'tentative', priority:'emergency', locked:false, winStart:0,   start:null, room:null},
+      {id:'6', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'tentative', priority:'emergency', locked:false, winStart:0,   start:null, room:null},
+      {id:'7', O:30, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'tentative', priority:'emergency', locked:false, winStart:0,   start:null, room:null}
+
     ];
     reoptimize();
   })();
