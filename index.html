@@ -1,6 +1,6 @@
-<!-- 顏慈瑩2025.10.5 v18-->
+<!-- YIN, Tzu-Ying 2025.10.5 -->
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -31,6 +31,9 @@
       --col-W:#00b0f0; --col-W-b:#0077a3; --col-W-t:#fff;  /* Wake-up */
       --col-C:#0b76a0; --col-C-b:#064d66; --col-C-t:#fff;  /* Clean-up */
       --col-F:#d86ecc; --col-F-b:#a8329b; --col-F-t:#fff;  /* Family comm (Doctor only) */
+      
+      /* NEW: Idle Block color (Surgeon Downtime) */
+      --col-Idle:#e0e7ff; --col-Idle-b:#93c5fd; --col-Idle-t:#4338ca; 
     }
 
     *,*::before,*::after{ box-sizing:border-box; }
@@ -77,6 +80,8 @@
 
     .legend{ padding:6px 14px; font-size:12px; color:#475569; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
     .chip{ display:inline-block; width:14px; height:10px; border-radius:3px; border:1px solid #cbd5e1; }
+    /* Add Idle chip to legend */
+    .chip.Idle{ background:var(--col-Idle); border:1px solid var(--col-Idle-b); }
 
     .gantt-wrap{ padding:12px 14px; display:grid; grid-template-columns:160px 1fr; gap:12px; align-items:start; max-width:100%; }
     .gantt{ position:relative; width:100%; overflow-x:auto; border:1px dashed #cbd5e1; background:#fcfdff; border-radius:10px; padding:12px; }
@@ -92,7 +97,7 @@
 
     .lane{ position:relative; height:var(--lane-h); border:1px solid #e2e8f0; background:#f8fafc; border-radius:8px; margin-bottom:var(--gap); }
 
-    .block{ position:absolute; top:5px; height: calc(var(--lane-h) - 10px); border-radius:6px; overflow:hidden; }
+    .block{ position:absolute; top:5px; height: calc(var(--lane-h) - 10px); border-radius:6px; overflow:hidden; cursor: pointer; }
     .block .label{ font-size:12px; font-weight:700; padding:2px 6px; }
     .block.locked{ outline:2px dashed rgba(0,0,0,.15); }
 
@@ -103,6 +108,8 @@
     .block.W{ background:var(--col-W); border:1px solid var(--col-W-b); color:var(--col-W-t);} /* Wake-up */
     .block.C{ background:var(--col-C); border:1px solid var(--col-C-b); color:var(--col-C-t);} /* Clean-up */
     .block.F{ background:var(--col-F); border:1px solid var(--col-F-b); color:var(--col-F-t);} /* Family comm. (Doctor only) */
+    .block.Idle{ background:var(--col-Idle); border:1px solid var(--col-Idle-b); color:var(--col-Idle-t); opacity: 0.8; cursor: default; } 
+    .block.Idle .label{ font-weight: 500; font-size: 11px; } /* Mute text slightly */
 
     table{ width:100%; border-collapse:collapse; font-size:13px; }
     th,td{ padding:8px; border-bottom:1px solid var(--line-2); text-align:left; }
@@ -112,12 +119,23 @@
 
     .notice{ margin-top:8px; font-size:12px; color:#b45309; display:none; }
     .notice.show{ display:block; }
+    
+    /* NEW: Modal Styles */
+    .modal-overlay{ position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); display:none; justify-content:center; align-items:center; z-index:100; padding:20px; }
+    .modal-overlay.show{ display:flex; }
+    .modal-content{ background:var(--card); border-radius:12px; padding:24px; max-width:500px; width:100%; box-shadow:0 8px 30px rgba(0,0,0,0.2); }
+    .modal-header{ display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--line-2); padding-bottom:10px; margin-bottom:15px; }
+    .modal-close{ background:none; border:none; font-size:24px; cursor:pointer; color:var(--muted); line-height:1; }
+    .detail-grid{ display:grid; grid-template-columns: auto 1fr; gap:8px 15px; font-size:14px; }
+    .detail-grid strong{ color:var(--text); }
+    .detail-grid span{ color:var(--muted); }
   </style>
 </head>
 <body>
   <header>
     <h1>Dual‑OR Scheduler</h1>
-    <div class="sub">Mode: <span class="badge" id="modeLabel">Plan Builder</span> · Day length 570 min (≈ 07:30–17:00)</div>
+    <!-- Simplified header to reflect fixed mode -->
+    <div class="sub">Mode: Plan Builder (Fixed) · Day length 570 min (≈ 07:30–17:00)</div>
   </header>
 
   <div class="container">
@@ -125,13 +143,7 @@
     <div class="card">
       <h2>Controls</h2>
       <div class="section">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-          <label><strong>Mode</strong></label>
-          <div class="mode" role="tablist" aria-label="Mode switch">
-            <button id="btnPlan" class="active" aria-pressed="true">Plan Builder</button>
-            <button id="btnGap" aria-pressed="false">Gap Filler</button>
-          </div>
-        </div>
+        <!-- Removed Mode Selection UI -->
       </div>
 
       <div class="section kpis">
@@ -142,10 +154,10 @@
           <div style="font-size:11px; opacity:.85" id="kpiUpdated">Last updated —</div>
         </div>
         <div class="kpi idle" id="kpiIdleCard">
-          <small>Surgeon downtime (est.)</small>
+          <small>Surgeon Downtime (est.)</small>
           <div style="font-size:22px; font-weight:800" id="kpiIdle">0 min</div>
           <div style="font-size:12px" id="kpiUtil">OR1 — 0% · OR2 — 0%</div>
-          <!-- UPDATED: Display both formulas for clarity -->
+          <!-- Updated formulas for clarity -->
           <div style="font-size:11px; opacity:.85">Surgeon: 570−OTIME−FTIME | OR Util: (I+O+W)/570</div>
         </div>
       </div>
@@ -159,11 +171,13 @@
           </div>
           <div>
             <label for="oMin">Operation (O) min *</label>
-            <input type="number" id="oMin" min="10" step="5" placeholder="e.g., 60" />
+            <!-- Step changed to 0.5 for half-minute precision -->
+            <input type="number" id="oMin" min="10" step="0.5" placeholder="e.g., 60.5" />
           </div>
           <div>
-            <label for="winStart">Earliest start (HH:MM, optional)</label>
-            <input type="time" id="winStart" min="07:30" max="17:00" step="300" placeholder="e.g., 08:30" />
+            <label for="winStart">Earliest start (HH:MM:SS, optional)</label>
+            <!-- Allows seconds for finer input resolution -->
+            <input type="time" id="winStart" min="07:30" max="17:00" placeholder="e.g., 08:30:30" />
           </div>
         </div>
 
@@ -179,8 +193,8 @@
           <div>
             <label for="priority">Priority</label>
             <select id="priority">
-              <option>Elective</option>
-              <option>Emergency</option>
+              <option value="elective">Elective</option>
+              <option value="emergency">Emergency</option>
             </select>
           </div>
           <div>
@@ -193,11 +207,12 @@
         </div>
 
         <div class="checkbox-row">
-          <label><input type="checkbox" id="ovS"> Set up <input type="number" id="valS" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
-          <label><input type="checkbox" id="ovI"> Induction <input type="number" id="valI" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
-          <label><input type="checkbox" id="ovW"> Wake up <input type="number" id="valW" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
-          <label><input type="checkbox" id="ovC"> Clean up <input type="number" id="valC" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
-          <label><input type="checkbox" id="ovF"> Family comm. <input type="number" id="valF" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
+          <!-- Step changed to 0.5 for all override duration inputs -->
+          <label><input type="checkbox" id="ovS"> Set up <input type="number" id="valS" min="0" step="0.5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovI"> Induction <input type="number" id="valI" min="0" step="0.5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovW"> Wake up <input type="number" id="valW" min="0" step="0.5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovC"> Clean up <input type="number" id="valC" min="0" step="0.5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovF"> Family comm. <input type="number" id="valF" min="0" step="0.5" placeholder="min" style="width:68px" disabled></label>
         </div>
 
         <div class="btn-row">
@@ -214,12 +229,13 @@
     <div class="card">
       <h2>Schedule & Timeline</h2>
       <div class="legend">
-        <span><span class="chip" style="background:var(--col-S);"></span> S</span>
-        <span><span class="chip" style="background:var(--col-I);"></span> I</span>
-        <span><span class="chip" style="background:var(--col-O);"></span> O</span>
-        <span><span class="chip" style="background:var(--col-W);"></span> W</span>
-        <span><span class="chip" style="background:var(--col-C);"></span> C</span>
-        <span><span class="chip" style="background:var(--col-F);"></span> F (Doctor)</span>
+        <span><span class="chip" style="background:var(--col-S);"></span> S (Setup)</span>
+        <span><span class="chip" style="background:var(--col-I);"></span> I (Induction)</span>
+        <span><span class="chip" style="background:var(--col-O);"></span> O (Operation)</span>
+        <span><span class="chip" style="background:var(--col-W);"></span> W (Wake-up)</span>
+        <span><span class="chip" style="background:var(--col-C);"></span> C (Clean-up)</span>
+        <span><span class="chip" style="background:var(--col-F);"></span> F (Family Comm)</span>
+        <span><span class="chip Idle"></span> Idle (Downtime)</span>
       </div>
       <div class="gantt-wrap">
         <div id="gantt" class="gantt" role="region" aria-label="Timeline"></div>
@@ -232,6 +248,7 @@
             <tr>
               <th>ID</th>
               <th>Status</th>
+              <th>Prio.</th>
               <th>O</th>
               <th>S/I/W/C/F</th>
               <th>Room</th>
@@ -245,16 +262,30 @@
       </div>
     </div>
   </div>
+  
+  <!-- NEW: Case Detail Modal -->
+  <div id="caseDetailModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="detailTitle" style="font-size:20px; margin:0;">Case Details</h3>
+        <button id="detailCloseBtn" class="modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div id="detailBody" class="detail-grid">
+        <!-- Details populated by JS -->
+      </div>
+    </div>
+  </div>
 
   <script>
   // =====================
   // State & constants
   // =====================
-  const DAY_MINS = 570; // minutes in day window
+  const DAY_MINS = 570; // minutes in day window (7:30 to 17:00)
   let PX = 2;           // pixels per minute (responsive)
   const defaults = { S: 7.5, I: 20, W: 20, C: 7.5, F: 10 };
-  let cases = []; // {id,O,S,I,W,C,F,status,locked,winStart,start,room}
-  let mode = 'plan';
+  // Case structure now includes 'priority'
+  let cases = []; // {id,O,S,I,W,C,F,status,priority,locked,winStart,start,room} 
+  // Removed 'mode' variable as it's now fixed to 'plan'
   let seq = 1;
 
   // Helpers
@@ -266,31 +297,85 @@
 
   // Convert minutes from 07:30 origin to clock label
   const START_H = 7, START_M = 30;
-  function clockLabel(min){ const total = START_H*60 + START_M + min; const h = Math.floor(total/60), m = total%60; return `${h}:${String(m).padStart(2,'0')}`; }
+  // Supports seconds (for 0.5 minute precision)
+  function clockLabel(min){ 
+      const total = START_H * 60 + START_M + min; 
+      // Calculate total seconds from the start (07:30) and round to nearest second
+      const totalSec = Math.round(total * 60);
+
+      const h = Math.floor(totalSec / 3600); 
+      const remSec = totalSec % 3600;
+      const m = Math.floor(remSec / 60);
+      const s = remSec % 60;
+
+      const hStr = String(h).padStart(2, '0');
+      const mStr = String(m).padStart(2, '0');
+      
+      if (s > 0) {
+          // Display HH:MM:SS if seconds are present
+          return `${hStr}:${mStr}:${String(s).padStart(2, '0')}`;
+      }
+      return `${hStr}:${mStr}`;
+  }
   function fmt(min){ return (min==null) ? '—' : clockLabel(min); }
-  function toRelMinutes(t){ if(!t) return NaN; const parts = t.split(':'); if(parts.length !== 2) return NaN; const hh = parseInt(parts[0], 10), mm = parseInt(parts[1], 10); if(!Number.isFinite(hh)||!Number.isFinite(mm)) return NaN; const abs = hh*60 + mm; const origin = START_H*60 + START_M; return abs - origin; }
-  function toTimeInput(min){ if(min==null) return ''; const origin=START_H*60+START_M; const abs = origin + min; const h=Math.floor(abs/60), m=abs%60; return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); }
+  
+  // Handles time input with optional seconds (HH:MM:SS)
+  function toRelMinutes(t){ 
+      if(!t) return NaN; 
+      const parts = t.split(':').map(p => parseInt(p, 10)); 
+      if(parts.length < 2 || parts.length > 3) return NaN; 
+      
+      const hh = parts[0], mm = parts[1];
+      const ss = parts.length === 3 ? parts[2] : 0; // Handle HH:MM:SS or HH:MM
+      
+      if(!Number.isFinite(hh)||!Number.isFinite(mm)||!Number.isFinite(ss)) return NaN; 
+      
+      const abs = hh*60 + mm + ss/60; // Total absolute minutes from midnight
+      const origin = START_H*60 + START_M; 
+      return abs - origin; 
+  }
+  
+  // Outputs HH:MM:SS if needed
+  function toTimeInput(min){ 
+      if(min==null) return ''; 
+      const origin=START_H*60+START_M; 
+      const abs = origin + min; // Absolute minutes from midnight
+      
+      const totalSec = Math.round(abs * 60); // Use total seconds for precision
+      
+      const h = Math.floor(totalSec / 3600); 
+      const remSec = totalSec % 3600;
+      const m = Math.floor(remSec / 60);
+      const s = remSec % 60;
+      
+      const hStr = String(h).padStart(2, '0');
+      const mStr = String(m).padStart(2, '0');
+      
+      if (s > 0) {
+          return `${hStr}:${mStr}:${String(s).padStart(2, '0')}`;
+      }
+      return `${hStr}:${mStr}`;
+  }
 
   // Durations (F excluded from OR occupancy)
   const durOR = (c) => safe(c.S) + safe(c.I) + safe(c.O) + safe(c.W) + safe(c.C);
-  const durUtil = (c) => safe(c.I) + safe(c.O) + safe(c.W); // NEW: Duration used for utilization calculation (I+O+W)
+  const durUtil = (c) => safe(c.I) + safe(c.O) + safe(c.W); // Duration used for utilization calculation (I+O+W)
   const durTotal = (c) => durOR(c) + safe(c.F);
 
-  // Feasibility: OR block only uses S/I/O/W/C; surgeon O cannot overlap across cases
+  // Feasibility check: OR block must not overlap; Surgeon (O+F) must not overlap
   function feasibleAt(c, start, room){
     const end = start + durOR(c);
     if(start < (c.winStart||0) || end > DAY_MINS) return false;
 
-    // 檢查手術室（OR room）區塊是否重疊 (S, I, O, W, C)
+    // 1. Check OR room block overlap (S, I, O, W, C)
     for(const x of cases){
       if(x === c || x.start == null || x.room !== room) continue;
       const b1s = start, b1e = end, b2s = x.start, b2e = x.start + durOR(x);
-      if(!(b1e <= b2s || b2e <= b1s)) return false; // OR block overlap
+      if(!(b1e <= b2s || b2e <= b1s)) return false; // OR block overlap found
     }
 
-    // === 檢查外科醫生的完整佔用時間是否重疊 (O + F) ===
-    // 外科醫生的佔用時間從 Induction 結束後開始 (即 O 開始)
-    // 佔用期間為 O + F 
+    // 2. Check Surgeon's full engagement time overlap (O + F)
+    // Surgeon's engagement starts at the beginning of Operation (O)
     const cSurgeonStart = start + safe(c.S) + safe(c.I);
     const cSurgeonEnd = cSurgeonStart + safe(c.O) + safe(c.F); 
 
@@ -300,19 +385,18 @@
       const xSurgeonStart = x.start + safe(x.S) + safe(x.I);
       const xSurgeonEnd = xSurgeonStart + safe(x.O) + safe(x.F);
       
-      // 檢查整個外科醫生區塊 (O + F) 是否重疊
+      // Check if the entire surgeon block (O + F) overlaps
       if(!(cSurgeonEnd <= xSurgeonStart || xSurgeonEnd <= cSurgeonStart)) {
-          // console.log(`Surgeon overlap: Case ${c.id} (${fmt(cSurgeonStart)}-${fmt(cSurgeonEnd)}) overlaps with Case ${x.id} (${fmt(xSurgeonStart)}-${fmt(xSurgeonEnd)})`);
-          return false; // 外科醫生區塊重疊 => 不可行
+          return false; // Surgeon block overlap found
       }
     }
-    // === 邏輯更新結束 ===
     
     return true;
   }
 
   function placeEarliest(c, rooms=['OR1','OR2']){
-    const step = 5;
+    // Placement step size is 0.5 minutes
+    const step = 0.5;
     for(const room of rooms){
       for(let t = Math.max(0, c.winStart||0); t + durOR(c) <= DAY_MINS; t += step){
         if(feasibleAt(c, t, room)){ c.start = t; c.room = room; return true; }
@@ -322,42 +406,122 @@
   }
 
   function schedulePlan(){
-    // 1. Clear previous placements
+    // 1. Clear previous placements for unlocked cases
     cases.forEach(c => { if (!c.locked) { c.start = null; c.room = null; } });
     
-    // 2. Sort cases: Locked first, then by earliest window start
+    // 2. Separate and sort cases
     const locked = cases.filter(c=>c.locked);
     const unlocked = cases.filter(c=>!c.locked);
 
-    // Locked cases must respect their current placement
+    // Place locked cases first (based on current/desired start time)
     locked.sort((a,b)=> (a.start ?? a.winStart ?? 0) - (b.start ?? b.winStart ?? 0));
-    // For locked cases without a start (shouldn't happen often, but a safety)
     for(const c of locked){ if(c.start == null) placeEarliest(c); }
 
-    // Unlocked cases are placed around the locked ones
-    unlocked.sort((a,b)=> (a.winStart ?? 0) - (b.winStart ?? 0));
+    // Place unlocked cases: Priority logic added here. 
+    // Emergency (0) comes before Elective (1). Then sort by earliest window start (winStart).
+    unlocked.sort((a,b) => {
+        const priorityA = a.priority === 'emergency' ? 0 : 1;
+        const priorityB = b.priority === 'emergency' ? 0 : 1;
+        
+        if (priorityA !== priorityB) {
+            return priorityA - priorityB; // Emergency comes first
+        }
+        
+        // Tie-breaker: sort by earliest start window
+        return (a.winStart ?? 0) - (b.winStart ?? 0);
+    });
+
     for(const c of unlocked){ placeEarliest(c); }
   }
 
-  function scheduleGap(){
-    // In Gap Filler mode, only place cases that have not been placed yet
-    for(const c of cases){ if(c.start == null) placeEarliest(c); }
-  }
-  
+  // scheduleGap() function removed as mode is fixed
+
   function reoptimize(){
-    (mode === 'plan') ? schedulePlan() : scheduleGap();
+    // Fixed to Plan Builder mode
+    schedulePlan();
     render();
   }
 
   // =====================
+  // Surgeon Idle Time Calculation
+  // =====================
+  
+  // Gets all time blocks when the surgeon is actively engaged (O + F)
+  function getSurgeonOccupiedIntervals() {
+      let intervals = [];
+      for (const c of cases) {
+          if (c.start == null) continue;
+
+          // Surgeon engagement starts at O and includes F
+          const start = c.start + safe(c.S) + safe(c.I);
+          const end = start + safe(c.O) + safe(c.F);
+          
+          if (start < end) {
+              // Clamp intervals to the day boundaries [0, DAY_MINS]
+              intervals.push({ 
+                  start: clamp(start, 0, DAY_MINS), 
+                  end: clamp(end, 0, DAY_MINS)
+              });
+          }
+      }
+      
+      // Sort by start time
+      intervals.sort((a, b) => a.start - b.start);
+
+      // Merge overlapping intervals
+      if (intervals.length === 0) return [];
+      
+      const merged = [intervals[0]];
+      for (let i = 1; i < intervals.length; i++) {
+          const lastMerged = merged[merged.length - 1];
+          const current = intervals[i];
+          
+          // If the current interval overlaps with the last merged one, merge them
+          if (current.start <= lastMerged.end) {
+              lastMerged.end = Math.max(lastMerged.end, current.end);
+          } else {
+              // Otherwise, add the current interval
+              merged.push(current);
+          }
+      }
+      
+      return merged;
+  }
+  
+  // Calculates the gaps (idle time) between occupied blocks
+  function getSurgeonIdleBlocks() {
+      const occupied = getSurgeonOccupiedIntervals();
+      let idleBlocks = [];
+      let currentTime = 0; // Start of the day (07:30 = minute 0)
+      
+      for (const block of occupied) {
+          // Gap between currentTime and the start of the next occupied block
+          if (block.start > currentTime) {
+              idleBlocks.push({ start: currentTime, end: block.start });
+          }
+          // Advance currentTime past the end of the current occupied block
+          currentTime = block.end;
+      }
+      
+      // Gap between the last occupied block and the end of the day (17:00 = minute 570)
+      if (currentTime < DAY_MINS) {
+          idleBlocks.push({ start: currentTime, end: DAY_MINS });
+      }
+      
+      return idleBlocks;
+  }
+
+
+  // =====================
   // UI wiring
   // =====================
-  const btnPlan = $('btnPlan');
-  const btnGap  = $('btnGap');
-  const modeLabel = $('modeLabel');
-  if(btnPlan){ btnPlan.onclick = ()=>{ mode='plan'; btnPlan.classList.add('active'); btnGap.classList.remove('active'); modeLabel.textContent='Plan Builder'; reoptimize(); }; } // Changed to reoptimize()
-  if(btnGap){  btnGap.onclick  = ()=>{ mode='gap';  btnGap.classList.add('active');  btnPlan.classList.remove('active'); modeLabel.textContent='Gap Filler';  reoptimize(); }; } // Changed to reoptimize()
-  document.addEventListener('keydown', (e)=>{ if(e.key==='ArrowLeft'){ btnPlan?.click(); } if(e.key==='ArrowRight'){ btnGap?.click(); } });
+  // Removed btnPlan, btnGap, modeLabel setup as mode selection is removed
+  // const btnPlan = $('btnPlan');
+  // const btnGap  = $('btnGap');
+  // const modeLabel = $('modeLabel');
+  // if(btnPlan){ btnPlan.onclick = ... }; 
+  // if(btnGap){  btnGap.onclick  = ... }; 
+  // document.addEventListener('keydown', (e)=>{ ... });
 
   ;['S','I','W','C','F'].forEach(k=>{ const ck=$('ov'+k), iv=$('val'+k); if(ck && iv){ ck.addEventListener('change', ()=>{ iv.disabled = !ck.checked; if(iv.disabled) iv.value=''; }); } });
 
@@ -366,7 +530,7 @@
     const idTxt = ($('caseId').value || '').trim() || `C-${String(seq++).padStart(3,'0')}`;
     const O = parseFloat($('oMin').value);
     
-    // Custom non-alert error handling (as required by rules)
+    // Error handling (non-alert)
     if(!Number.isFinite(O) || O <= 0){ console.error('Error: Please enter a valid Operation time (minutes).'); return; }
 
     // Logic for overriding defaults
@@ -377,16 +541,19 @@
     const F = $('ovF')?.checked ? nnum($('valF').value, defaults.F) : defaults.F;
 
     const status = $('status').value;
+    const priority = $('priority').value; // Get the priority value
     const locked = $('lockSel').value === 'yes';
     const wsStr = $('winStart').value; const ws = toRelMinutes(wsStr);
     const winStart = Number.isFinite(ws) ? clamp(ws, 0, DAY_MINS) : 0;
 
     const idx = cases.findIndex(x=>x.id === idTxt);
-    const data = { id:idTxt, O, S, I, W, C, F, status, locked, winStart };
+    // Include priority in data object
+    const data = { id:idTxt, O, S, I, W, C, F, status, priority, locked, winStart }; 
+    
     if(idx >= 0){ cases[idx] = Object.assign(cases[idx], data); }
     else { cases.push(Object.assign({ start:null, room:null }, data)); }
 
-    reoptimize(); // Always reoptimize after adding/updating in either mode
+    reoptimize(); // Always reoptimize after adding/updating
     clearForm();
   }; }
 
@@ -404,7 +571,8 @@
       }
     });
     if($('status')) $('status').value='confirmed';
-    if($('priority')) $('priority').value='Elective';
+    // Reset priority to default
+    if($('priority')) $('priority').value='elective'; 
     if($('lockSel')) $('lockSel').value='no';
   }
 
@@ -428,7 +596,7 @@
 
     // OR utilizations (I+O+W)
     const occ = { OR1:0, OR2:0 };
-    for(const c of cases){ if(c.start==null||!c.room) continue; occ[c.room] += durUtil(c); } // NOW using durUtil(c)
+    for(const c of cases){ if(c.start==null||!c.room) continue; occ[c.room] += durUtil(c); } // Uses durUtil(c) = I+O+W
     const u1raw = cases.some(c=>c.room==='OR1') ? Math.round((occ.OR1/DAY_MINS)*100) : 0;
     const u2raw = cases.some(c=>c.room==='OR2') ? Math.round((occ.OR2/DAY_MINS)*100) : 0;
     const u1 = clamp(u1raw,0,100), u2 = clamp(u2raw,0,100);
@@ -441,13 +609,31 @@
   // =====================
   // Gantt rendering
   // =====================
+  // addBlock now includes click listener for details
   function addBlock(kind, start, end, lane, id){
     if(end<=start) return;
     const div = document.createElement('div');
     div.className = `block ${kind}`;
     div.style.left = (start*PX)+'px';
     div.style.width = ((end-start)*PX)+'px';
-    div.innerHTML = `<div class="label">${id} ${kind}</div>`;
+    
+    let labelText;
+    if (kind === 'Idle') {
+        // ID is the English label with duration
+        labelText = id; 
+    } else {
+        // Use kind.split(' ')[0] to correctly display "S", "I", "O", etc., even if kind is "S locked"
+        labelText = `${id} ${kind.split(' ')[0]}`;
+    }
+    
+    div.innerHTML = `<div class="label">${labelText}</div>`;
+    
+    // Add click handler (No click handler for Idle blocks)
+    if (kind !== 'Idle') {
+        div.dataset.caseId = id;
+        div.addEventListener('click', () => showCaseDetails(id));
+    }
+
     lane.appendChild(div);
   }
 
@@ -489,11 +675,24 @@
     const laneDoc = document.createElement('div'); laneDoc.className='lane';
     inner.appendChild(lane1); inner.appendChild(lane2); inner.appendChild(laneDoc);
 
+    // Lane Labels
     ;['OR-1','OR-2','Doctor'].forEach(text=>{ const lr=document.createElement('div'); lr.className='label-row'; lr.textContent=text; left.appendChild(lr); });
 
     const endLine = document.createElement('div'); endLine.style.position='absolute'; endLine.style.left=(DAY_MINS*PX)+'px'; endLine.style.top=spacerH+'px'; endLine.style.bottom='0'; endLine.style.width='1px'; endLine.style.background='#e2e8f0'; inner.appendChild(endLine);
 
-    // Paint blocks
+    // NEW: Paint Surgeon Idle Blocks (Downtime) FIRST as background on the Doctor lane
+    const idleBlocks = getSurgeonIdleBlocks();
+    const MIN_IDLE_DISPLAY = 5; // Minimum idle time gap to display (minutes)
+    for (const idle of idleBlocks) {
+        const duration = Math.round(idle.end - idle.start);
+        // Only draw if duration meets the minimum display time
+        if (duration >= MIN_IDLE_DISPLAY) { 
+            // Label is now only the duration and unit: "XX min"
+            addBlock('Idle', idle.start, idle.end, laneDoc, `${duration} min`);
+        }
+    }
+
+    // Paint occupied blocks
     for(const c of cases){
       if(c.start == null || !c.room) continue;
       const lane = c.room === 'OR1' ? lane1 : lane2;
@@ -501,8 +700,8 @@
 
       const sStart = c.start, sEnd = sStart + safe(c.S);
       const iStart = sEnd,    iEnd = iStart + safe(c.I);
-      const oStart = iEnd,    oEnd = iStart + safe(c.O);
-      const wStart = oEnd,    wEnd = wStart + safe(c.W);
+      const oStart = iEnd,    oEnd = oStart + safe(c.O);
+      const wStart = oEnd,    wEnd = oStart + safe(c.W);
       const cStart = wEnd,    cEnd = cStart + safe(c.C);
 
       // OR lane: S, I, O, W, C
@@ -512,7 +711,7 @@
       addBlock('W '+isLocked, wStart, wEnd, lane, c.id);
       addBlock('C '+isLocked, cStart, cEnd, lane, c.id);
 
-      // Doctor lane: O and F (F immediately after O)
+      // Doctor lane: O and F (O and F blocks are drawn AFTER Idle blocks for correct stacking)
       addBlock('O', oStart, oEnd, laneDoc, c.id);
       const fStart = oEnd, fEnd = fStart + safe(c.F);
       addBlock('F', fStart, fEnd, laneDoc, c.id);
@@ -528,11 +727,13 @@
     const tbody = document.querySelector('#tbl tbody'); if(!tbody) return; tbody.innerHTML = ''; const frag = document.createDocumentFragment();
     for(const c of cases){
       const tr = document.createElement('tr');
+      // Use toFixed(1) for half-minute precision display
       tr.innerHTML = `
         <td><strong>${c.id}</strong></td>
         <td><span class="badge">${c.status}</span></td>
-        <td>${Math.round(safe(c.O))}</td>
-        <td class="muted">${[c.S,c.I,c.W,c.C,c.F].map(x=>Math.round(safe(x))).join('/')}</td>
+        <td><span class="badge" style="${c.priority === 'emergency' ? 'background:#fee2e2; color:#b91c1c; border-color:#fca5a5;' : ''}">${c.priority}</span></td>
+        <td>${safe(c.O).toFixed(1)}</td>
+        <td class="muted">${[c.S,c.I,c.W,c.C,c.F].map(x=>safe(x).toFixed(1)).join('/')}</td>
         <td>${c.room||'—'}</td>
         <td>${fmt(c.start)}</td>
         <td>${c.locked? '🔒' : ''}</td>
@@ -542,16 +743,17 @@
           <button class="btn" data-act="del">Delete</button>
         </td>`;
 
-      // *** IMPORTANT UPDATE: Call reoptimize() when constraints change ***
+      // Call reoptimize() when constraints change
       tr.querySelector('[data-act="lock"]').onclick = ()=>{ 
         c.locked = !c.locked; 
-        reoptimize(); // Re-run scheduling logic to respect the new lock/unlock status
+        reoptimize(); 
       };
       
       tr.querySelector('[data-act="edit"]').onclick = ()=>{
         $('caseId').value = c.id;
         $('oMin').value = c.O;
         $('status').value = c.status;
+        $('priority').value = c.priority; // Set priority in form
         $('lockSel').value = c.locked? 'yes':'no';
         $('winStart').value = (c.winStart != null) ? toTimeInput(c.winStart) : '';
         
@@ -570,7 +772,7 @@
       
       tr.querySelector('[data-act="del"]').onclick = ()=>{ 
         cases = cases.filter(x=>x.id !== c.id); 
-        reoptimize(); // Re-run scheduling logic after deletion
+        reoptimize(); 
       };
 
       frag.appendChild(tr);
@@ -579,14 +781,80 @@
   }
 
   // =====================
+  // Detail Modal Logic
+  // =====================
+  const detailModal = $('caseDetailModal');
+  const detailTitle = $('detailTitle');
+  const detailBody = $('detailBody');
+  const detailCloseBtn = $('detailCloseBtn');
+
+  if(detailCloseBtn) detailCloseBtn.onclick = () => detailModal.classList.remove('show');
+
+  function showCaseDetails(id) {
+    const c = cases.find(x => x.id === id);
+    if (!c) return;
+    if (c.start == null) {
+      console.warn(`Case ${id} is not scheduled yet.`);
+      return;
+    }
+
+    detailTitle.textContent = `Case ${c.id} Details`;
+
+    // Calculate times
+    const totalOR = durOR(c).toFixed(1);
+    const totalSurgeon = (safe(c.O) + safe(c.F)).toFixed(1);
+    
+    // Determine the full time span for display
+    let startTime = fmt(c.start);
+    let orEndTime = fmt(c.start + durOR(c));
+    let surgeonEndTime = fmt(c.start + safe(c.S) + safe(c.I) + safe(c.O) + safe(c.F));
+    
+    // Status translation
+    const statusText = c.status === 'confirmed' ? 'Confirmed' : 
+                       c.status === 'tentative' ? 'Tentative' : 'Emergency Hold';
+    const priorityText = c.priority === 'emergency' ? 'Emergency 🚨' : 'Elective'; // Display priority
+    const lockText = c.locked ? 'Yes 🔒' : 'No';
+    const winStartText = c.winStart ? fmt(c.winStart) : 'Any Time (07:30)';
+
+    // Construct body content (in English)
+    detailBody.innerHTML = `
+        <strong>Status:</strong> <span>${statusText}</span>
+        <strong>Priority:</strong> <span>${priorityText}</span>
+        <strong>Assigned Room:</strong> <span>${c.room || 'Unassigned'}</span>
+        <strong>Actual Start Time:</strong> <span>${startTime}</span>
+        
+        <hr style="grid-column: 1 / 3; border: 0; border-top: 1px solid var(--line-2); margin: 5px 0 5px 0;">
+
+        <strong>Operation (O) Duration:</strong> <span>${safe(c.O).toFixed(1)} min</span>
+        <strong>Family Comm. (F) Duration:</strong> <span>${safe(c.F).toFixed(1)} min</span>
+        <strong>Is Schedule Locked:</strong> <span>${lockText}</span>
+        <strong>Earliest Start Window:</strong> <span>${winStartText}</span>
+
+        <hr style="grid-column: 1 / 3; border: 0; border-top: 1px solid var(--line-2); margin: 5px 0 5px 0;">
+
+        <strong>Total OR Block (S~C):</strong> <span>${totalOR} min (${startTime} — ${orEndTime})</span>
+        <strong>Surgeon Engagement (O+F):</strong> <span>${totalSurgeon} min (Ends at ${surgeonEndTime})</span>
+        
+        <hr style="grid-column: 1 / 3; border: 0; border-top: 1px solid var(--line-2); margin: 5px 0 5px 0;">
+        
+        <strong>Setup (S):</strong> <span>${safe(c.S).toFixed(1)} min</span>
+        <strong>Induction (I):</strong> <span>${safe(c.I).toFixed(1)} min</span>
+        <strong>Wake-up (W):</strong> <span>${safe(c.W).toFixed(1)} min</span>
+        <strong>Clean-up (C):</strong> <span>${safe(c.C).toFixed(1)} min</span>
+    `;
+
+    detailModal.classList.add('show');
+}
+  
+  // =====================
   // Seed demo & first render
   // =====================
   (function seed(){
     const d = defaults;
     cases = [
-      {id:'C-001', O:60, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'confirmed', locked:true,  winStart:0,   start:null, room:null},
-      {id:'C-002', O:45, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'tentative', locked:false, winStart:0,   start:null, room:null},
-      {id:'C-003', O:90, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'confirmed', locked:false, winStart:60,  start:null, room:null}
+      {id:'C-001', O:60, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'confirmed', priority:'elective', locked:true,  winStart:0,   start:null, room:null},
+      {id:'C-002', O:45, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'tentative', priority:'emergency', locked:false, winStart:0,   start:null, room:null}, // Emergency, should be prioritized
+      {id:'C-003', O:90, S:d.S, I:d.I, W:d.W, C:d.C, F:d.F, status:'confirmed', priority:'elective', locked:false, winStart:60,  start:null, room:null}
     ];
     reoptimize();
   })();
