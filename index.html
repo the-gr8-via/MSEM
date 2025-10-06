@@ -1,10 +1,10 @@
-<!-- 顏慈瑩2025.10.5 / Plan-Only + 30秒粒度 / 無最上方副標 -->
+<!-- 顏慈瑩2025.10.5 / Plan-Only + 30秒粒度 / 無最上方副標（整檔已套用） -->
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dual‑OR Scheduler — v2.7 (Plan‑Only, OR Util = I+O+W, 30s step)</title>
+  <title>Dual-OR Scheduler — v2.7 (Plan-Only, OR Util = I+O+W, 30s step)</title>
   <style>
     :root{
       --day-mins: 570;            /* 7:30–17:00 */
@@ -85,7 +85,7 @@
 
     .lane{ position:relative; height:var(--lane-h); border:1px solid #e2e8f0; background:#f8fafc; border-radius:8px; margin-bottom:var(--gap); }
 
-    .block{ position:absolute; top:5px; height: calc(var(--lane-h) - 10px); border-radius:6px; overflow:hidden; }
+    .block{ position:absolute; top:5px; height: calc(var(--lane-h) - 10px); border-radius:6px; overflow:hidden; cursor:pointer; }
     .block .label{ font-size:12px; font-weight:700; padding:2px 6px; }
     .block.locked{ outline:2px dashed rgba(0,0,0,.15); }
 
@@ -104,11 +104,15 @@
 
     .notice{ margin-top:8px; font-size:12px; color:#b45309; display:none; }
     .notice.show{ display:block; }
+
+    /* === Tooltip for blocks === */
+    .tooltip{ position:fixed; z-index:9999; display:none; max-width:260px; padding:8px 10px; border-radius:8px; border:1px solid #cbd5e1; background:#111827; color:#fff; font-size:12px; box-shadow:0 6px 18px rgba(0,0,0,.18); pointer-events:none; }
+    .tooltip strong{ font-weight:800; }
   </style>
 </head>
 <body>
   <header>
-    <h1>Dual‑OR Scheduler</h1>
+    <h1>Dual-OR Scheduler</h1>
     <!-- 已移除最上方副標資訊列 -->
   </header>
 
@@ -144,8 +148,9 @@
             <input type="number" id="oMin" min="10" step="0.5" placeholder="e.g., 60" />
           </div>
           <div>
-            <label for="winStart">Earliest start (HH:MM, optional)</label>
-            <input type="time" id="winStart" min="07:30" max="17:00" step="300" placeholder="e.g., 08:30" />
+            <label for="winStart">Earliest start (HH:MM or HH:MM:SS, optional)</label>
+            <!-- 改為 30 秒步進 -->
+            <input type="time" id="winStart" min="07:30" max="17:00" step="30" placeholder="e.g., 08:30 or 08:30:30" />
           </div>
         </div>
 
@@ -185,7 +190,7 @@
         <div class="btn-row">
           <button class="btn primary" id="btnAdd">Add / Update Case</button>
           <button class="btn" id="btnClear">Clear Form</button>
-          <button class="btn ghost" id="btnReopt">Re‑optimize</button>
+          <button class="btn ghost" id="btnReopt">Re-optimize</button>
         </div>
         <div style="margin-top:6px" class="muted">Defaults: S 7.5, I 20, W 20, C 7.5, F 10 (min).</div>
         <div id="notice" class="notice">⚠️ 有些個案無法排進視窗，試著解鎖、調整開始時間或時長。</div>
@@ -238,14 +243,44 @@
   const $ = (id) => document.getElementById(id);
   const nowStr = () => new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
   const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
-  const nnum = (v, fb) => { const n = parseFloat(v); return Number.isFinite(n) ? n : fb; };
+  const nnum = (v, fb) => { const n = parseFloat(v); return Number.isFinite(n) ? n : fb; }
   const safe = (x) => { const n = Number(x); return Number.isFinite(n) ? n : 0; };
 
   const START_H = 7, START_M = 30;
-  function clockLabel(min){ const total = START_H*60 + START_M + min; const h = Math.floor(total/60), m = Math.round((total%60)*100)/100; const mm = String(Math.floor(m)).padStart(2,'0'); return `${h}:${mm}`; }
+
+  // ===== 時間顯示與解析：支援 30 秒 =====
+  function clockLabel(min){
+    // min 可含 0.5（= 30 秒）
+    const base = START_H*60 + START_M;
+    const total = base + min;            // 分鐘
+    const h = Math.floor(total/60);
+    const mFloat = total - h*60;         // 0..59.5
+    const m = Math.floor(mFloat);
+    const s = Math.round((mFloat - m) * 60); // 0 或 30
+    const mm = String(m).padStart(2,'0');
+    return s ? `${h}:${mm}:${String(s).padStart(2,'0')}` : `${h}:${mm}`;
+  }
   function fmt(min){ return (min==null) ? '—' : clockLabel(min); }
-  function toRelMinutes(t){ if(!t) return NaN; const [hh,mm] = t.split(':').map(Number); if(!Number.isFinite(hh)||!Number.isFinite(mm)) return NaN; const origin = START_H*60 + START_M; return hh*60 + mm - origin; }
-  function toTimeInput(min){ if(min==null) return ''; const origin=START_H*60+START_M; const abs = origin + min; const h=Math.floor(abs/60), m=abs%60; return String(h).padStart(2,'0')+':'+String(Math.floor(m)).padStart(2,'0'); }
+  function toRelMinutes(t){
+    // 接受 HH:MM 或 HH:MM:SS
+    if(!t) return NaN;
+    const [hh, mm, ss = 0] = t.split(':').map(Number);
+    if(!Number.isFinite(hh)||!Number.isFinite(mm)||!Number.isFinite(ss)) return NaN;
+    const origin = START_H*60 + START_M;
+    return (hh*60 + mm + ss/60) - origin; // 分鐘，可含 0.5
+  }
+  function toTimeInput(min){
+    if(min==null) return '';
+    const origin=START_H*60+START_M;
+    const abs = origin + min;                 // 分鐘
+    const h=Math.floor(abs/60);
+    const mFloat = abs - h*60;
+    const m = Math.floor(mFloat);
+    const s = Math.round((mFloat - m) * 60);  // 0 或 30
+    const hh = String(h).padStart(2,'0');
+    const mm = String(m).padStart(2,'0');
+    return s ? `${hh}:${mm}:${String(s).padStart(2,'0')}` : `${hh}:${mm}`;
+  }
 
   // Durations helpers
   const durOR = (c) => safe(c.S) + safe(c.I) + safe(c.O) + safe(c.W) + safe(c.C); // OR occupancy (engineering)
@@ -378,7 +413,27 @@
     div.className = `block ${kind}`;
     div.style.left = (start*PX)+'px';
     div.style.width = ((end-start)*PX)+'px';
+    div.setAttribute('role','button');
+    div.setAttribute('tabindex','0');
+    // dataset for tooltip
+    div.dataset.id = id;
+    div.dataset.kind = kind;
+    div.dataset.start = start;
+    div.dataset.end = end;
     div.innerHTML = `<div class="label">${id} ${kind}</div>`;
+
+    const kindMap = {S:'Setup', I:'Induction', O:'Operation', W:'Wake-up', C:'Clean-up', F:'Family comm.'};
+    const fmtRange = (s,e)=> `${clockLabel(s)} – ${clockLabel(e)}`;
+
+    const openTip = (evt)=>{
+      const html = `<strong>${id}</strong> · ${kindMap[kind]||kind}<br>${fmtRange(start, end)}`;
+      showTip(html, evt);
+      evt.stopPropagation();
+    };
+    div.addEventListener('click', openTip);
+    div.addEventListener('mousemove', (e)=> moveTip(e));
+    div.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ openTip(e); }});
+
     lane.appendChild(div);
   }
 
@@ -406,7 +461,16 @@
       scale.appendChild(tick);
     }
     const rem = DAY_MINS - limit;
-    if(rem){ const last = document.createElement('div'); last.className='tick'; last.style.width=(rem*PX)+'px'; last.style.textAlign='right'; last.style.paddingRight='2px'; last.style.borderRight='1px solid #e2e8f0'; last.textContent=clockLabel(DAY_MINS); scale.appendChild(last); }
+    if(rem){
+      const last = document.createElement('div');
+      last.className='tick';
+      last.style.width=(rem*PX)+'px';
+      last.style.textAlign='right';
+      last.style.paddingRight='2px';
+      last.style.borderRight='1px solid #e2e8f0';
+      last.textContent=clockLabel(DAY_MINS);
+      scale.appendChild(last);
+    }
     inner.appendChild(scale);
 
     const spacer = document.createElement('div'); const padTop = parseFloat(getComputedStyle(g).paddingTop)||0; const scaleMargin = parseFloat(getComputedStyle(scale).marginBottom)||0; const spacerH = padTop + scale.offsetHeight + scaleMargin; spacer.style.height = spacerH + 'px'; left.appendChild(spacer);
@@ -440,9 +504,14 @@
       const fStart = oEnd, fEnd = fStart + safe(c.F);
       addBlock('F', fStart, fEnd, laneDoc, c.id);
     }
+
+    // click outside to dismiss tooltip
+    g.addEventListener('click', (e)=>{ if(!e.target.closest('.block')) hideTip(); });
+    document.addEventListener('click', (e)=>{ if(!e.target.closest('.block')) hideTip(); });
   }
 
   function render(){ renderTable(); renderGantt(); kpis(); }
+render();
 
   function renderTable(){
     const tbody = document.querySelector('#tbl tbody'); if(!tbody) return; tbody.innerHTML = ''; const frag = document.createDocumentFragment();
@@ -487,6 +556,14 @@
     ];
     reoptimize();
   })();
+
+  // === Tooltip singleton ===
+  const __tip = document.createElement('div');
+  __tip.className = 'tooltip';
+  document.body.appendChild(__tip);
+  function showTip(html, evt){ __tip.innerHTML = html; __tip.style.display='block'; moveTip(evt); }
+  function moveTip(evt){ if(!evt) return; const pad=12; let x = evt.clientX + pad; let y = evt.clientY + pad; const vw = window.innerWidth; const vh = window.innerHeight; const rect = __tip.getBoundingClientRect(); if(x+rect.width+8 > vw) x = vw - rect.width - 8; if(y+rect.height+8 > vh) y = vh - rect.height - 8; __tip.style.left = x + 'px'; __tip.style.top = y + 'px'; }
+  function hideTip(){ __tip.style.display='none'; }
 
   window.addEventListener('resize', render);
   </script>
