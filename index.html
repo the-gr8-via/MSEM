@@ -1,11 +1,14 @@
-<!-- 顏慈瑩2025.10.5 / Plan-Only + 30秒粒度 / 無最上方副標（整檔已套用） -->
+<!-- 顏慈瑩2025.10.5 -->
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dual-OR Scheduler — v2.7 (Plan-Only, OR Util = I+O+W, 30s step)</title>
+  <title>Dual‑OR Scheduler — v2.5 (Downtime = 570 − OTIME − FTIME)</title>
   <style>
+    /* =====================
+       Design tokens
+       ===================== */
     :root{
       --day-mins: 570;            /* 7:30–17:00 */
       --px-per-min: 2;            /* timeline scale */
@@ -21,13 +24,13 @@
       /* KPI colors */
       --idle-ok:#002d74; --idle-high:#f3c300;
 
-      /* === Stage colors === */
+      /* === Stage colors (you can edit these) === */
       --col-S:#e97132; --col-S-b:#c2410c; --col-S-t:#fff;  /* Setup */
       --col-I:#92d050; --col-I-b:#6aa84f; --col-I-t:#fff;  /* Induction */
       --col-O:#c00000; --col-O-b:#7f0000; --col-O-t:#fff;  /* Operation */
       --col-W:#00b0f0; --col-W-b:#0077a3; --col-W-t:#fff;  /* Wake-up */
       --col-C:#0b76a0; --col-C-b:#064d66; --col-C-t:#fff;  /* Clean-up */
-      --col-F:#d86ecc; --col-F-b:#a8329b; --col-F-t:#fff;  /* Family comm */
+      --col-F:#d86ecc; --col-F-b:#a8329b; --col-F-t:#fff;  /* Family comm (Doctor only) */
     }
 
     *,*::before,*::after{ box-sizing:border-box; }
@@ -62,6 +65,10 @@
     .btn.primary{ background: var(--primary); border-color: var(--primary); color:#fff; }
     .btn.ghost{ background:transparent; }
 
+    .mode{ display:inline-flex; background:#eef2ff; border-radius:10px; overflow:hidden; border:1px solid #c7d2fe; }
+    .mode button{ border:none; padding:8px 12px; font-weight:700; color:#334155; background:transparent; cursor:pointer; }
+    .mode button.active{ background:var(--primary-2); color:#fff; }
+
     .kpis{ display:grid; grid-template-columns: repeat(2,1fr); gap:8px; margin-bottom:10px; }
     .kpi{ background:#4e6d9e; color:#fff; border-radius:10px; padding:10px 12px; }
     .kpi small{ opacity:.85; display:block; font-weight:500; }
@@ -85,16 +92,17 @@
 
     .lane{ position:relative; height:var(--lane-h); border:1px solid #e2e8f0; background:#f8fafc; border-radius:8px; margin-bottom:var(--gap); }
 
-    .block{ position:absolute; top:5px; height: calc(var(--lane-h) - 10px); border-radius:6px; overflow:hidden; cursor:pointer; }
+    .block{ position:absolute; top:5px; height: calc(var(--lane-h) - 10px); border-radius:6px; overflow:hidden; }
     .block .label{ font-size:12px; font-weight:700; padding:2px 6px; }
     .block.locked{ outline:2px dashed rgba(0,0,0,.15); }
 
+    /* Stage color classes */
     .block.S{ background:var(--col-S); border:1px solid var(--col-S-b); color:var(--col-S-t);} /* Setup */
     .block.I{ background:var(--col-I); border:1px solid var(--col-I-b); color:var(--col-I-t);} /* Induction */
     .block.O{ background:var(--col-O); border:1px solid var(--col-O-b); color:var(--col-O-t);} /* Operation */
     .block.W{ background:var(--col-W); border:1px solid var(--col-W-b); color:var(--col-W-t);} /* Wake-up */
     .block.C{ background:var(--col-C); border:1px solid var(--col-C-b); color:var(--col-C-t);} /* Clean-up */
-    .block.F{ background:var(--col-F); border:1px solid var(--col-F-b); color:var(--col-F-t);} /* Family comm */
+    .block.F{ background:var(--col-F); border:1px solid var(--col-F-b); color:var(--col-F-t);} /* Family comm. (Doctor only) */
 
     table{ width:100%; border-collapse:collapse; font-size:13px; }
     th,td{ padding:8px; border-bottom:1px solid var(--line-2); text-align:left; }
@@ -104,22 +112,27 @@
 
     .notice{ margin-top:8px; font-size:12px; color:#b45309; display:none; }
     .notice.show{ display:block; }
-
-    /* === Tooltip for blocks === */
-    .tooltip{ position:fixed; z-index:9999; display:none; max-width:260px; padding:8px 10px; border-radius:8px; border:1px solid #cbd5e1; background:#111827; color:#fff; font-size:12px; box-shadow:0 6px 18px rgba(0,0,0,.18); pointer-events:none; }
-    .tooltip strong{ font-weight:800; }
   </style>
 </head>
 <body>
   <header>
-    <h1>Dual-OR Scheduler</h1>
-    <!-- 已移除最上方副標資訊列 -->
+    <h1>Dual‑OR Scheduler</h1>
+    <div class="sub">Mode: <span class="badge" id="modeLabel">Plan Builder</span> · Day length 570 min (≈ 07:30–17:00)</div>
   </header>
 
   <div class="container">
     <!-- LEFT: Controls -->
     <div class="card">
       <h2>Controls</h2>
+      <div class="section">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+          <label><strong>Mode</strong></label>
+          <div class="mode" role="tablist" aria-label="Mode switch">
+            <button id="btnPlan" class="active" aria-pressed="true">Plan Builder</button>
+            <button id="btnGap" aria-pressed="false">Gap Filler</button>
+          </div>
+        </div>
+      </div>
 
       <div class="section kpis">
         <div class="kpi">
@@ -132,7 +145,7 @@
           <small>Surgeon downtime (est.)</small>
           <div style="font-size:22px; font-weight:800" id="kpiIdle">0 min</div>
           <div style="font-size:12px" id="kpiUtil">OR1 — 0% · OR2 — 0%</div>
-          <div style="font-size:11px; opacity:.85">Doctor downtime = 570 − OTIME − FTIME · OR Util = (I+O+W)/570</div>
+          <div style="font-size:11px; opacity:.85">Formula: 570 − OTIME − FTIME</div>
         </div>
       </div>
 
@@ -145,12 +158,11 @@
           </div>
           <div>
             <label for="oMin">Operation (O) min *</label>
-            <input type="number" id="oMin" min="10" step="0.5" placeholder="e.g., 60" />
+            <input type="number" id="oMin" min="10" step="5" placeholder="e.g., 60" />
           </div>
           <div>
-            <label for="winStart">Earliest start (HH:MM or HH:MM:SS, optional)</label>
-            <!-- 改為 30 秒步進 -->
-            <input type="time" id="winStart" min="07:30" max="17:00" step="30" placeholder="e.g., 08:30 or 08:30:30" />
+            <label for="winStart">Earliest start (HH:MM, optional)</label>
+            <input type="time" id="winStart" min="07:30" max="17:00" step="300" placeholder="e.g., 08:30" />
           </div>
         </div>
 
@@ -180,20 +192,20 @@
         </div>
 
         <div class="checkbox-row">
-          <label><input type="checkbox" id="ovS"> Set up <input type="number" id="valS" min="0" step="0.5" placeholder="min" style="width:68px" disabled></label>
-          <label><input type="checkbox" id="ovI"> Induction <input type="number" id="valI" min="0" step="0.5" placeholder="min" style="width:68px" disabled></label>
-          <label><input type="checkbox" id="ovW"> Wake up <input type="number" id="valW" min="0" step="0.5" placeholder="min" style="width:68px" disabled></label>
-          <label><input type="checkbox" id="ovC"> Clean up <input type="number" id="valC" min="0" step="0.5" placeholder="min" style="width:68px" disabled></label>
-          <label><input type="checkbox" id="ovF"> Family comm. <input type="number" id="valF" min="0" step="0.5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovS"> Set up <input type="number" id="valS" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovI"> Induction <input type="number" id="valI" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovW"> Wake up <input type="number" id="valW" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovC"> Clean up <input type="number" id="valC" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
+          <label><input type="checkbox" id="ovF"> Family comm. <input type="number" id="valF" min="0" step="5" placeholder="min" style="width:68px" disabled></label>
         </div>
 
         <div class="btn-row">
           <button class="btn primary" id="btnAdd">Add / Update Case</button>
           <button class="btn" id="btnClear">Clear Form</button>
-          <button class="btn ghost" id="btnReopt">Re-optimize</button>
+          <button class="btn ghost" id="btnReopt">Re‑optimize</button>
         </div>
-        <div style="margin-top:6px" class="muted">Defaults: S 7.5, I 20, W 20, C 7.5, F 10 (min).</div>
-        <div id="notice" class="notice">Some cases cannot be queued into the window. Try unlocking, adjusting the start time or duration.</div>
+        <div style="margin-top:6px" class="muted">Defaults: S 7.5, I 20, W 20, C 7.5, F 10 (min). Surgeon engaged during O; see Doctor lane for O & F.</div>
+        <div id="notice" class="notice">⚠️ Some cases could not be placed within the day window. Consider unlocking, adjusting start windows, or durations.</div>
       </div>
     </div>
 
@@ -234,90 +246,60 @@
   </div>
 
   <script>
+  // =====================
+  // State & constants
+  // =====================
   const DAY_MINS = 570; // minutes in day window
   let PX = 2;           // pixels per minute (responsive)
   const defaults = { S: 7.5, I: 20, W: 20, C: 7.5, F: 10 };
-  let cases = [];
-  let seq = 1;          // plan only
+  let cases = []; // {id,O,S,I,W,C,F,status,locked,winStart,start,room}
+  let mode = 'plan';
+  let seq = 1;
 
+  // Helpers
   const $ = (id) => document.getElementById(id);
   const nowStr = () => new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
   const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
-  const nnum = (v, fb) => { const n = parseFloat(v); return Number.isFinite(n) ? n : fb; }
+  const nnum = (v, fb) => { const n = parseFloat(v); return Number.isFinite(n) ? n : fb; };
   const safe = (x) => { const n = Number(x); return Number.isFinite(n) ? n : 0; };
 
+  // Convert minutes from 07:30 origin to clock label
   const START_H = 7, START_M = 30;
-
-  // ===== 時間顯示與解析：支援 30 秒 =====
-  function clockLabel(min){
-    // min 可含 0.5（= 30 秒）
-    const base = START_H*60 + START_M;
-    const total = base + min;            // 分鐘
-    const h = Math.floor(total/60);
-    const mFloat = total - h*60;         // 0..59.5
-    const m = Math.floor(mFloat);
-    const s = Math.round((mFloat - m) * 60); // 0 或 30
-    const mm = String(m).padStart(2,'0');
-    return s ? `${h}:${mm}:${String(s).padStart(2,'0')}` : `${h}:${mm}`;
-  }
+  function clockLabel(min){ const total = START_H*60 + START_M + min; const h = Math.floor(total/60), m = total%60; return `${h}:${String(m).padStart(2,'0')}`; }
   function fmt(min){ return (min==null) ? '—' : clockLabel(min); }
-  function toRelMinutes(t){
-    // 接受 HH:MM 或 HH:MM:SS
-    if(!t) return NaN;
-    const [hh, mm, ss = 0] = t.split(':').map(Number);
-    if(!Number.isFinite(hh)||!Number.isFinite(mm)||!Number.isFinite(ss)) return NaN;
-    const origin = START_H*60 + START_M;
-    return (hh*60 + mm + ss/60) - origin; // 分鐘，可含 0.5
-  }
-  function toTimeInput(min){
-    if(min==null) return '';
-    const origin=START_H*60+START_M;
-    const abs = origin + min;                 // 分鐘
-    const h=Math.floor(abs/60);
-    const mFloat = abs - h*60;
-    const m = Math.floor(mFloat);
-    const s = Math.round((mFloat - m) * 60);  // 0 或 30
-    const hh = String(h).padStart(2,'0');
-    const mm = String(m).padStart(2,'0');
-    return s ? `${hh}:${mm}:${String(s).padStart(2,'0')}` : `${hh}:${mm}`;
-  }
+  function toRelMinutes(t){ if(!t) return NaN; const parts = t.split(':'); if(parts.length !== 2) return NaN; const hh = parseInt(parts[0], 10), mm = parseInt(parts[1], 10); if(!Number.isFinite(hh)||!Number.isFinite(mm)) return NaN; const abs = hh*60 + mm; const origin = START_H*60 + START_M; return abs - origin; }
+  function toTimeInput(min){ if(min==null) return ''; const origin=START_H*60+START_M; const abs = origin + min; const h=Math.floor(abs/60), m=abs%60; return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); }
 
-  // Durations helpers
-  const durOR = (c) => safe(c.S) + safe(c.I) + safe(c.O) + safe(c.W) + safe(c.C); // OR occupancy (engineering)
-  const durIOW = (c) => safe(c.I) + safe(c.O) + safe(c.W);                          // OR utilization (reporting)
+  // Durations (F excluded from OR occupancy)
+  const durOR = (c) => safe(c.S) + safe(c.I) + safe(c.O) + safe(c.W) + safe(c.C);
+  const durTotal = (c) => durOR(c) + safe(c.F);
 
-  // Feasibility rules: Doctor O+F 不重疊；同一 OR 的 S/I/O/W/C 不重疊。
+  // Feasibility: OR block only uses S/I/O/W/C; surgeon O cannot overlap across cases
   function feasibleAt(c, start, room){
     const end = start + durOR(c);
     if(start < (c.winStart||0) || end > DAY_MINS) return false;
 
     const cOs = start + safe(c.S) + safe(c.I);
     const cOe = cOs + safe(c.O);
-    const cFe = cOe + safe(c.F);
-
-    // Doctor O+F no overlap
     for(const x of cases){
       if(x === c || x.start == null) continue;
       const xOs = x.start + safe(x.S) + safe(x.I);
       const xOe = xOs + safe(x.O);
-      const xFe = xOe + safe(x.F);
-      if(!(cFe <= xOs || xFe <= cOs)) return false;
+      if(!(cOe <= xOs || xOe <= cOs)) return false; // overlap in O times => not feasible
     }
 
-    // OR occupancy no overlap (S/I/O/W/C) in same room
     for(const x of cases){
       if(x === c || x.start == null || x.room !== room) continue;
       const b1s = start, b1e = end, b2s = x.start, b2e = x.start + durOR(x);
-      if(!(b1e <= b2s || b2e <= b1s)) return false;
+      if(!(b1e <= b2s || b2e <= b1s)) return false; // OR block overlap
     }
-
     return true;
   }
 
   function placeEarliest(c, rooms=['OR1','OR2']){
-    const step = 0.5; // 30秒粒度
+    const step = 5;
     for(const room of rooms){
-      for(let t = Math.max(0, c.winStart||0); t + durOR(c) <= DAY_MINS + 1e-9; t = Math.round((t + step)*2)/2){
+      for(let t = Math.max(0, c.winStart||0); t + durOR(c) <= DAY_MINS; t += step){
         if(feasibleAt(c, t, room)){ c.start = t; c.room = room; return true; }
       }
     }
@@ -336,9 +318,19 @@
     for(const c of unlocked){ placeEarliest(c); }
   }
 
-  function reoptimize(){ schedulePlan(); render(); }
+  function scheduleGap(){ for(const c of cases){ if(c.start == null) placeEarliest(c); } }
+  function reoptimize(){ (mode === 'plan') ? schedulePlan() : scheduleGap(); render(); }
 
-  // UI wiring (Plan only)
+  // =====================
+  // UI wiring
+  // =====================
+  const btnPlan = $('btnPlan');
+  const btnGap  = $('btnGap');
+  const modeLabel = $('modeLabel');
+  if(btnPlan){ btnPlan.onclick = ()=>{ mode='plan'; btnPlan.classList.add('active'); btnGap.classList.remove('active'); modeLabel.textContent='Plan Builder'; render(); }; }
+  if(btnGap){  btnGap.onclick  = ()=>{ mode='gap';  btnGap.classList.add('active');  btnPlan.classList.remove('active'); modeLabel.textContent='Gap Filler';  render(); }; }
+  document.addEventListener('keydown', (e)=>{ if(e.key==='ArrowLeft'){ btnPlan?.click(); } if(e.key==='ArrowRight'){ btnGap?.click(); } });
+
   ;['S','I','W','C','F'].forEach(k=>{ const ck=$('ov'+k), iv=$('val'+k); if(ck && iv){ ck.addEventListener('change', ()=>{ iv.disabled = !ck.checked; if(iv.disabled) iv.value=''; }); } });
 
   const addBtn = $('btnAdd');
@@ -363,7 +355,7 @@
     if(idx >= 0){ cases[idx] = Object.assign(cases[idx], data); }
     else { cases.push(Object.assign({ start:null, room:null }, data)); }
 
-    reoptimize();
+    (mode === 'plan') ? reoptimize() : render();
     clearForm();
   }; }
 
@@ -378,7 +370,9 @@
     if($('lockSel')) $('lockSel').value='no';
   }
 
-  // KPIs & Utilization
+  // =====================
+  // KPIs
+  // =====================
   function kpis(){
     const count = cases.filter(c=>['confirmed','tentative','emergency'].includes(c.status)).length;
     const conf  = cases.filter(c=>c.status==='confirmed').length;
@@ -388,17 +382,18 @@
     $('kpiBreak').textContent = `Confirmed ${conf} · Tentative ${tent} · Emerg ${emerg}`;
     $('kpiUpdated').textContent = `Last updated ${nowStr()}`;
 
-    // Doctor downtime = 570 − OTIME − FTIME
+    // === NEW: Surgeon downtime = 570 − OTIME − FTIME ===
+    // OTIME: total (non-overlapping) O minutes. Overlap is already prevented between cases' O by feasibility rule.
     const Otime = cases.filter(c=>c.start!=null).reduce((sum,c)=> sum + safe(c.O), 0);
     const Ftime = cases.filter(c=>c.start!=null).reduce((sum,c)=> sum + safe(c.F), 0);
     const idle = clamp(DAY_MINS - Otime - Ftime, 0, DAY_MINS);
     $('kpiIdle').textContent = `${Math.round(idle)} min`;
 
-    // OR utilization per room = (sum of I+O+W in that room) / DAY_MINS
-    const occIOW = { OR1:0, OR2:0 };
-    for(const c of cases){ if(c.start==null||!c.room) continue; occIOW[c.room] += durIOW(c); }
-    const u1raw = cases.some(c=>c.room==='OR1') ? Math.round((occIOW.OR1/DAY_MINS)*100) : 0;
-    const u2raw = cases.some(c=>c.room==='OR2') ? Math.round((occIOW.OR2/DAY_MINS)*100) : 0;
+    // OR utilizations exclude F (unchanged)
+    const occ = { OR1:0, OR2:0 };
+    for(const c of cases){ if(c.start==null||!c.room) continue; occ[c.room] += durOR(c); }
+    const u1raw = cases.some(c=>c.room==='OR1') ? Math.round((occ.OR1/DAY_MINS)*100) : 0;
+    const u2raw = cases.some(c=>c.room==='OR2') ? Math.round((occ.OR2/DAY_MINS)*100) : 0;
     const u1 = clamp(u1raw,0,100), u2 = clamp(u2raw,0,100);
     $('kpiUtil').textContent = `OR1 — ${u1}% · OR2 — ${u2}%`;
 
@@ -406,34 +401,16 @@
     const idleCard = document.getElementById('kpiIdleCard'); if(idleCard){ idleCard.classList.toggle('high', idle >= 60); }
   }
 
+  // =====================
   // Gantt rendering
+  // =====================
   function addBlock(kind, start, end, lane, id){
     if(end<=start) return;
     const div = document.createElement('div');
     div.className = `block ${kind}`;
     div.style.left = (start*PX)+'px';
     div.style.width = ((end-start)*PX)+'px';
-    div.setAttribute('role','button');
-    div.setAttribute('tabindex','0');
-    // dataset for tooltip
-    div.dataset.id = id;
-    div.dataset.kind = kind;
-    div.dataset.start = start;
-    div.dataset.end = end;
     div.innerHTML = `<div class="label">${id} ${kind}</div>`;
-
-    const kindMap = {S:'Setup', I:'Induction', O:'Operation', W:'Wake-up', C:'Clean-up', F:'Family comm.'};
-    const fmtRange = (s,e)=> `${clockLabel(s)} – ${clockLabel(e)}`;
-
-    const openTip = (evt)=>{
-      const html = `<strong>${id}</strong> · ${kindMap[kind]||kind}<br>${fmtRange(start, end)}`;
-      showTip(html, evt);
-      evt.stopPropagation();
-    };
-    div.addEventListener('click', openTip);
-    div.addEventListener('mousemove', (e)=> moveTip(e));
-    div.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ openTip(e); }});
-
     lane.appendChild(div);
   }
 
@@ -441,16 +418,19 @@
     const wrap = document.querySelector('.gantt-wrap');
     if(!wrap) return;
 
+    // Rebuild structure
     wrap.innerHTML = '';
     const left = document.createElement('div'); left.id = 'ganttLabels'; left.className = 'left-col-outer'; wrap.appendChild(left);
     const g = document.createElement('div'); g.id = 'gantt'; g.className = 'gantt'; wrap.appendChild(g);
 
+    // Avoid 0 width on first paint
     const containerWidth = g.getBoundingClientRect().width || g.parentElement.getBoundingClientRect().width || 800;
-    const available = containerWidth - 24;
+    const available = containerWidth - 24; // padding compensation
     PX = Math.max(0.8, Math.min(2, available / Math.max(1, DAY_MINS)));
 
     const inner = document.createElement('div'); inner.className = 'gantt-inner'; inner.style.width = (DAY_MINS * PX) + 'px'; g.appendChild(inner);
 
+    // Scale
     const scale = document.createElement('div'); scale.className='scale';
     const limit = DAY_MINS - (DAY_MINS % 60);
     for(let t = 0; t < limit; t += 60){
@@ -461,20 +441,12 @@
       scale.appendChild(tick);
     }
     const rem = DAY_MINS - limit;
-    if(rem){
-      const last = document.createElement('div');
-      last.className='tick';
-      last.style.width=(rem*PX)+'px';
-      last.style.textAlign='right';
-      last.style.paddingRight='2px';
-      last.style.borderRight='1px solid #e2e8f0';
-      last.textContent=clockLabel(DAY_MINS);
-      scale.appendChild(last);
-    }
+    if(rem){ const last = document.createElement('div'); last.className='tick'; last.style.width=(rem*PX)+'px'; last.style.textAlign='right'; last.style.paddingRight='2px'; last.style.borderRight='1px solid #e2e8f0'; last.textContent=clockLabel(DAY_MINS); scale.appendChild(last); }
     inner.appendChild(scale);
 
     const spacer = document.createElement('div'); const padTop = parseFloat(getComputedStyle(g).paddingTop)||0; const scaleMargin = parseFloat(getComputedStyle(scale).marginBottom)||0; const spacerH = padTop + scale.offsetHeight + scaleMargin; spacer.style.height = spacerH + 'px'; left.appendChild(spacer);
 
+    // Lanes
     const lane1 = document.createElement('div'); lane1.className='lane';
     const lane2 = document.createElement('div'); lane2.className='lane';
     const laneDoc = document.createElement('div'); laneDoc.className='lane';
@@ -484,6 +456,7 @@
 
     const endLine = document.createElement('div'); endLine.style.position='absolute'; endLine.style.left=(DAY_MINS*PX)+'px'; endLine.style.top=spacerH+'px'; endLine.style.bottom='0'; endLine.style.width='1px'; endLine.style.background='#e2e8f0'; inner.appendChild(endLine);
 
+    // Paint blocks
     for(const c of cases){
       if(c.start == null || !c.room) continue;
       const lane = c.room === 'OR1' ? lane1 : lane2;
@@ -494,25 +467,25 @@
       const wStart = oEnd,    wEnd = wStart + safe(c.W);
       const cStart = wEnd,    cEnd = cStart + safe(c.C);
 
+      // OR lane: S, I, O, W, C
       addBlock('S', sStart, sEnd, lane, c.id);
       addBlock('I', iStart, iEnd, lane, c.id);
       addBlock('O', oStart, oEnd, lane, c.id);
       addBlock('W', wStart, wEnd, lane, c.id);
       addBlock('C', cStart, cEnd, lane, c.id);
 
+      // Doctor lane: O and F (F immediately after O)
       addBlock('O', oStart, oEnd, laneDoc, c.id);
       const fStart = oEnd, fEnd = fStart + safe(c.F);
       addBlock('F', fStart, fEnd, laneDoc, c.id);
     }
-
-    // click outside to dismiss tooltip
-    g.addEventListener('click', (e)=>{ if(!e.target.closest('.block')) hideTip(); });
-    document.addEventListener('click', (e)=>{ if(!e.target.closest('.block')) hideTip(); });
   }
 
   function render(){ renderTable(); renderGantt(); kpis(); }
-render();
 
+  // =====================
+  // Table rendering
+  // =====================
   function renderTable(){
     const tbody = document.querySelector('#tbl tbody'); if(!tbody) return; tbody.innerHTML = ''; const frag = document.createDocumentFragment();
     for(const c of cases){
@@ -521,7 +494,7 @@ render();
         <td><strong>${c.id}</strong></td>
         <td><span class="badge">${c.status}</span></td>
         <td>${Math.round(safe(c.O))}</td>
-        <td class="muted">${[c.S,c.I,c.W,c.C,c.F].map(x=>Number.isInteger(x)?x:x.toFixed(1)).join('/')}</td>
+        <td class="muted">${[c.S,c.I,c.W,c.C,c.F].map(x=>Math.round(safe(x))).join('/')}</td>
         <td>${c.room||'—'}</td>
         <td>${fmt(c.start)}</td>
         <td>${c.locked? '🔒' : ''}</td>
@@ -547,6 +520,9 @@ render();
     tbody.appendChild(frag);
   }
 
+  // =====================
+  // Seed demo & first render
+  // =====================
   (function seed(){
     const d = defaults;
     cases = [
@@ -556,14 +532,6 @@ render();
     ];
     reoptimize();
   })();
-
-  // === Tooltip singleton ===
-  const __tip = document.createElement('div');
-  __tip.className = 'tooltip';
-  document.body.appendChild(__tip);
-  function showTip(html, evt){ __tip.innerHTML = html; __tip.style.display='block'; moveTip(evt); }
-  function moveTip(evt){ if(!evt) return; const pad=12; let x = evt.clientX + pad; let y = evt.clientY + pad; const vw = window.innerWidth; const vh = window.innerHeight; const rect = __tip.getBoundingClientRect(); if(x+rect.width+8 > vw) x = vw - rect.width - 8; if(y+rect.height+8 > vh) y = vh - rect.height - 8; __tip.style.left = x + 'px'; __tip.style.top = y + 'px'; }
-  function hideTip(){ __tip.style.display='none'; }
 
   window.addEventListener('resize', render);
   </script>
