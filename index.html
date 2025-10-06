@@ -1,10 +1,10 @@
-<!-- 顏慈瑩 2025.10.5 v24 -->
+<!-- 顏慈瑩 2025.10.5 v25 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dual‑OR Scheduler</title>
+  <title>Dual‑OR Scheduler — v2.5 (Downtime = 570 − OTIME − FTIME)</title>
   <style>
     /* =====================
        Design tokens
@@ -346,22 +346,58 @@
     return false;
   }
 
+  // NEW: greedy util-maximizing placement (prep I ahead, O+F back-to-back)
+  function placeForUtil(c, tDoc){
+    const step = 0.5;
+    const rooms = ['OR1','OR2'];
+    let best = null;
+    for(const room of rooms){
+      for(let s = Math.max(0, c.winStart||0); s + durOR(c) <= DAY_MINS; s += step){
+        const o = s + safe(c.S) + safe(c.I);
+        if (o < tDoc) continue;
+        if (feasibleAt(c, s, room)){
+          if(!best || o < best.o) best = {room, s, o};
+          break;
+        }
+      }
+    }
+    if(best){ c.start = best.s; c.room = best.room; return { placed:true, oStart: best.o }; }
+    return { placed:false };
+  }
+
   function schedulePlan(){
+    // Reset non-locked placements
     cases.forEach(c => { if (!c.locked) { c.start = null; c.room = null; } });
+
     const locked = cases.filter(c=>c.locked);
     const unlocked = cases.filter(c=>!c.locked);
 
+    // Place locked first (keep their spots or place earliest if missing)
     locked.sort((a,b)=> (a.start ?? a.winStart ?? 0) - (b.start ?? b.winStart ?? 0));
     for(const c of locked){ if(c.start == null) placeEarliest(c); }
 
-    // Priority logic now based on STATUS only: emergency first, then by window start
-    unlocked.sort((a,b) => {
-        const ra = a.status === 'emergency' ? 0 : 1;
-        const rb = b.status === 'emergency' ? 0 : 1;
-        if (ra !== rb) return ra - rb;
-        return (a.winStart ?? 0) - (b.winStart ?? 0);
+    // Surgeon becomes available after the last locked O+F block
+    let occ = getSurgeonOccupiedIntervals();
+    let tDoc = occ.length ? occ[occ.length-1].end : 0;
+    tDoc = clamp(tDoc, 0, DAY_MINS);
+
+    // Order unlocked: emergencies first, then by earliest start window
+    unlocked.sort((a,b)=>{
+      const ra = a.status === 'emergency' ? 0 : 1;
+      const rb = b.status === 'emergency' ? 0 : 1;
+      if (ra !== rb) return ra - rb;
+      return (a.winStart ?? 0) - (b.winStart ?? 0);
     });
-    for(const c of unlocked){ placeEarliest(c); }
+
+    // Place to maximize OR utilization by staging S+I and chaining O+F
+    for(const c of unlocked){
+      const res = placeForUtil(c, tDoc);
+      if (res.placed){
+        // Surgeon engages for O+F starting at res.oStart
+        tDoc = Math.min(DAY_MINS, res.oStart + safe(c.O) + safe(c.F));
+      }
+      // else leave unscheduled (can't fit within day window/constraints)
+    }
   }
 
   function reoptimize(){
