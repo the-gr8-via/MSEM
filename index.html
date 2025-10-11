@@ -1,10 +1,10 @@
-<!-- 顏慈瑩 2025.10.5 v25 -->
+<!-- 顏慈瑩 2025.10.11 v26 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dual‑OR Scheduler — v2.5 (Downtime = 570 − OTIME − FTIME)</title>
+  <title>Dual‑OR Scheduler</title>
   <style>
     /* =====================
        Design tokens
@@ -203,6 +203,7 @@
           <button class="btn primary" id="btnAdd">Add / Update Case</button>
           <button class="btn" id="btnClear">Clear Form</button>
           <button class="btn ghost" id="btnReopt">Re‑optimize</button>
+          <button class="btn ghost" id="btnExport">Export CSV</button>
         </div>
         <div style="margin-top:6px" class="muted">Defaults: S 7.5, I 20, W 20, C 7.5, F 10 (min). Surgeon engaged during O; see Doctor lane for O & F.</div>
         <div id="notice" class="notice">⚠️ Some cases could not be placed within the day window. Consider unlocking, adjusting start windows, or durations.</div>
@@ -464,6 +465,34 @@
 
   const clearBtn = $('btnClear'); if(clearBtn){ clearBtn.onclick = clearForm; }
   const reoptBtn = $('btnReopt'); if(reoptBtn){ reoptBtn.onclick = reoptimize; }
+  const exportBtn = $('btnExport'); if(exportBtn){ exportBtn.onclick = exportCsv; }
+
+  function exportCsv(){
+    const headers = ['ID','Status','O','S','I','W','C','F','Room','Start','Start_min','WinStart_min','Locked'];
+    const rows = cases.map(c=>{
+      const startStr = (c.start!=null) ? toTimeInput(c.start) : '';
+      const vals = [
+        c.id ?? '',
+        c.status ?? '',
+        safe(c.O), safe(c.S), safe(c.I), safe(c.W), safe(c.C), safe(c.F),
+        c.room || '',
+        startStr,
+        (c.start ?? ''),
+        (c.winStart ?? ''),
+        (c.locked ? 'yes' : 'no')
+      ];
+      return vals.map(v => '"' + String(v).replace(/"/g,'""') + '"').join(',');
+    });
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dual_or_schedule_${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
+  }
 
   function clearForm(){
     ['caseId','oMin','winStart','valS','valI','valW','valC','valF'].forEach(id=>{ const n=$(id); if(n) n.value=''; });
